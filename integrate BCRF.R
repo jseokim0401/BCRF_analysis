@@ -1,0 +1,126 @@
+
+# Combine v1 and v2 using seurat v5 rpca integration, did not do any other testing- Magda
+# combine v1 and v2, need batch correction, check w pca/ clustering - Siri
+# S3S v2 has more reads
+
+# KEEP/ From TBCRCn, RAHBTn, COMETn
+
+options(future.globals.maxSize = Inf)
+
+library(future)
+library(Seurat)
+library(Matrix)
+library(ggplot2)
+
+print(getOption("future.globals.maxSize"))
+options(Seurat.object.assay.version = "v5")
+
+# Load Seurat objects
+BCRF_set1_3 = readRDS('/Users/eguo/Downloads/BCRF RNA set 1-3 & EN.rds') 
+BCRF_set4_10 = readRDS('/Users/eguo/Downloads/BCRF RNA set 4-10.rds') 
+
+BCRF1_3n <- BCRF_set1_3
+BCRF4_10n <- BCRF_set4_10
+
+# Merge Seurat objects
+obj <- merge(x = BCRF1_3n,
+             y = list(BCRF4_10n), 
+             add.cell.ids = c('BCRF1_3&EN','BCRF4_10'))
+
+# Assign dataset labels
+# obj$dataset = sapply(Cells(obj), function(x) strsplit(x, '_')[[1]][1])
+
+# Normalize, scale from BCRF set xxx.R 
+obj <- NormalizeData(obj) # Adjust for seq depth, lib size to compare bw samples, includes log transform
+obj <- FindVariableFeatures(obj)
+# obj$log2counts = log2(obj$nCount_RNA + 1)
+obj <- ScaleData(obj) # Scales normalized, log-transformed counts for PCA or clustering
+obj <- RunPCA(obj, features = VariableFeatures(object = obj))
+obj <- FindNeighbors(obj, dims = 1:30, reduction = "pca")
+
+
+# Integrate layers using RPCA
+obj <- IntegrateLayers(
+  object = obj, method = RPCAIntegration, k.weight = 90,
+  orig.reduction = "pca", new.reduction = "integrated.rpca",
+  verbose = FALSE
+)
+
+head(obj@meta.data)
+
+# Find clusters after integration
+obj <- FindClusters(obj, resolution = 2.5, cluster.name = "rpca_clusters")
+obj <- RunUMAP(obj, reduction = "integrated.rpca", dims = 1:30, reduction.name = "umap.rpca")
+
+# obj <- JoinLayers(obj) # Join layers if needed
+# KEEP 
+
+
+
+##########
+
+setwd("/Users/eguo/Downloads/integrated BCRF set 1-10 & EN")
+
+DimPlot(obj, reduction = "umap.rpca", label = TRUE)
+ggsave("umap.rpca.png", width = 8, height = 8)
+
+obj$tissue[is.na(obj$tissue)] <- 'NA'
+DimPlot(obj, reduction = "umap.rpca", label = TRUE, group.by = "tissue")
+ggsave("tissue.png", width = 8, height = 8)
+
+DimPlot(obj, reduction = "umap.rpca", group.by = "protocol")
+ggsave("protocol.png", width = 8, height = 8)
+
+DimPlot(obj, reduction = "umap.rpca", group.by = "dxs")
+ggsave("dxs.png", width = 8, height = 8)  
+
+DimPlot(obj, reduction = "umap.rpca", group.by = "dx")
+ggsave("dx.png", width = 12, height = 8)
+
+n_patients <- length(unique(obj$patient))
+DimPlot(obj, reduction = "umap.rpca", group.by = "patient") +
+  ggtitle(paste("n patients = ", n_patients))
+ggsave("patient.png", width = 12, height = 8)  
+
+DimPlot(obj, reduction = "umap.rpca", group.by = "sequence batch number")
+ggsave("sequence batch number.png", width = 12, height = 8)
+
+# log2 of total counts (library size) per sample
+obj$log2counts <- log2(obj$nCount_RNA + 1)
+log2counts <- FeaturePlot(obj,
+            features = "log2counts",
+            combine = TRUE, 
+            label.size = 1) 
+print(log2counts)
+ggsave("log2counts.png", width = 8, height = 8)  
+
+
+FeaturePlot(obj, features = c("ESR1", "ERBB2", "MYC", "TP53", "PIK3CA"), cols = c("red", "blue"))
+ggsave("genes.png", width = 8, height = 8)
+
+saveRDS(obj, file = "/Users/eguo/Downloads/integrated_BCRF_set_1-10_&_EN.rds")
+
+
+
+
+#########
+cluster_markers_all <- FindAllMarkers(obj, 
+                       only.pos = FALSE,  # Includes both pos and neg markers
+                       min.pct = 0.1,     # Genes must be expressed in min 10% of samples in a cluster
+                       logfc.threshold = 0.25,  # LFC threshold
+                       test.use = DESeq2)
+
+head(cluster_markers_all)
+
+# Filter by adj pval and Log2FC
+cluster_markers_filtered <- cluster_markers_all %>%
+  filter(p_val_adj < 0.05)
+
+top_genes_per_cluster <- cluster_markers_filtered %>%
+  filter(avg_log2FC > 1 | avg_log2FC < -1) %>%   # Filter for log2FC > 1 or < -1
+  group_by(cluster) %>%                          # Group by cluster
+  top_n(100, wt = abs(avg_log2FC)) %>%           # Select top DE genes by avg_log2FC for each cluster
+  ungroup()
+
+
+
