@@ -20,7 +20,9 @@ The goal of this script will be to run DESeq2 for several comparisons in the BCR
 library(Seurat)
 library(DESeq2)
 library(BiocParallel)
-register(MulticoreParam(8))
+register(MulticoreParam(7))
+library(tidyverse)
+library(EnhancedVolcano)
 
 options(Seurat.object.assay.version = "v5")
 ```
@@ -33,11 +35,6 @@ BCRF <- readRDS("data/integrated_BCRF_set_1-10_&_EN.rds")
 ```{r}
 # Join counts layers from BCRF RNA set 1-3 and BCRF RNA set 4-10
 joined_BCRF <- JoinLayers(BCRF)
-```
-
-```{r}
-# Extract raw counts matrix from BCRF data
-# counts <- GetAssayData(joined_BCRF, assay = "RNA", layer = "counts")
 ```
 
 ## Ep v. Str (pseudobulk)
@@ -104,7 +101,46 @@ Ep_Str_dds <- Ep_Str_dds[Ep_Str_dds_keep,]
 Ep_Str_dds <- DESeq(Ep_Str_dds)
 ```
 
-## Ep v. Str (non-pb)
+## Ep v. Str (working)
+
+```{r}
+# Subset BCRF data to omit "NA", "Mix", and "EMT" tissue types 
+Ep_Str_subsetted_BCRF <- subset(
+  joined_BCRF,
+  subset = tissue %in% c("Ep", "Str")
+  )
+
+# Get counts data 
+Ep_Str_counts <- GetAssayData(Ep_Str_subsetted_BCRF, assay = "RNA", layer = "counts")
+
+# Build colData from meta.data
+Ep_Str_coldata <- data.frame(
+  patient = factor(Ep_Str_subsetted_BCRF@meta.data$patient), 
+  tissue = factor(Ep_Str_subsetted_BCRF@meta.data$tissue, levels = c("Ep", "Str")),
+  row.names = colnames(Ep_Str_counts)
+)
+```
+
+```{r}
+# Create DESeqDataSet from subset counts and group information 
+Ep_Str_dds <- DESeqDataSetFromMatrix(
+  countData = Ep_Str_counts,
+  colData = Ep_Str_coldata, 
+  design = ~ patient + tissue 
+)
+```
+
+```{r}
+# Keep genes with at least 1 count in at least 10 cells
+Ep_Str_dds_keep <- rowSums(counts(Ep_Str_dds) >= 1) >= 10
+Ep_Str_dds <- Ep_Str_dds[Ep_Str_dds_keep,]
+```
+
+```{r}
+Ep_Str_dds <- DESeq(Ep_Str_dds, parallel = TRUE)
+```
+
+## Ep v. Str (non-pb) OLD BAD 
 
 ```{r}
 # Define groups 
@@ -218,11 +254,13 @@ saveRDS(Ep_dds, "data/DESeq2/EpNL_EpInv_dds.rds")
 
 ```{r}
 # Save DESeq results 
-Ep_dds_res <- results(Ep_dds)
+Ep_dds_res <- results(Ep_dds, contrast = c("dxs", "NL", "Invasive"))
 summary(Ep_dds_res)
 
 # Convert results to dataframe
-Ep_dds_res_df <- as.data.frame(Ep_dds_res)
+Ep_dds_res_df <- Ep_dds_res |>
+  as.data.frame() |>
+  rownames_to_column(var = "Gene") # Make column for gene ids 
 
 # Save results 
 write.csv(Ep_dds_res_df, "data/DESeq2/EpNL_EpInv_res.csv")
@@ -236,3 +274,24 @@ Ep_sig_res <- Ep_dds_res[which(Ep_dds_res$padj < 0.05), ]
 Ep_sig_res_df <- as.data.frame(Ep_sig_res)
 ```
 
+### Volcano Plot
+
+```{r}
+EpNL_EpInv_VP <- EnhancedVolcano(Ep_dds_res_df,
+  x = "log2FoldChange", # fold change statistic to plot
+  y = "pvalue", # significance values
+  lab = Ep_dds_res_df$Gene, # labels for points
+  pCutoff = 1e-05, # The p value cutoff we will use (default)
+  FCcutoff = 1, # The fold change cutoff (default)
+  title = "Genes differentially expressed in Ep Invasive relative to Ep NL", # add title
+  caption = NULL,
+  labSize = 1.5 # smaller labels
+) +
+  # change the overall theme
+  theme_classic() +
+  # move the legend to the bottom
+  theme(legend.position = "bottom")
+
+# Save plots as .png
+ggsave("EpNL_EpInv_VP.png", EpNL_EpInv_VP, path = "plots/DESeq2")
+```
