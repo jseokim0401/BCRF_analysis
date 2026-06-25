@@ -13,7 +13,7 @@ The goal of this script will be to run DESeq2 for several comparisons in the BCR
 
 - Stromal Normal v. Stromal Invasive (Str NL v. Str Invasive)
 
-### Set-up to run DESeq2
+## Set-up to run DESeq2
 
 ```{r}
 # Load libraries
@@ -40,7 +40,7 @@ joined_BCRF <- JoinLayers(BCRF)
 # counts <- GetAssayData(joined_BCRF, assay = "RNA", layer = "counts")
 ```
 
-### Ep v. Str (pseudobulk)
+## Ep v. Str (pseudobulk)
 
 ```{r}
 # Subset BCRF data to omit "NA", "Mix", and "EMT" tissue types 
@@ -104,7 +104,7 @@ Ep_Str_dds <- Ep_Str_dds[Ep_Str_dds_keep,]
 Ep_Str_dds <- DESeq(Ep_Str_dds)
 ```
 
-### Ep v. Str (non-pb)
+## Ep v. Str (non-pb)
 
 ```{r}
 # Define groups 
@@ -141,7 +141,7 @@ Ep_Str_dds <- DESeqDataSetFromMatrix(
 Ep_Str_dds_object <- DESeq(Ep_Str_dds)
 ```
 
-### Ep NL v. Ep Invasive 
+## Ep NL v. Ep Invasive 
 
 ```{r}
 # Subset BCRF data to omit dxs that are not "NL" or "Invasive" 
@@ -209,5 +209,30 @@ Ep_dds <- Ep_dds[Ep_dds_keep,]
 ```{r}
 # Run DESeq
 Ep_dds <- DESeq(Ep_dds, parallel = TRUE)
+```
+
+```{r}
+# Save DESeq dds 
+saveRDS(Ep_dds, "data/DESeq2/EpNL_EpInv_dds.rds")
+```
+
+```{r}
+# Save DESeq results 
+Ep_dds_res <- results(Ep_dds)
+summary(Ep_dds_res)
+
+# Convert results to dataframe
+Ep_dds_res_df <- as.data.frame(Ep_dds_res)
+
+# Save results 
+write.csv(Ep_dds_res_df, "data/DESeq2/EpNL_EpInv_res.csv")
+```
+
+```{r}
+# Filter for significant results (adjusted p-value < 0.05)
+Ep_sig_res <- Ep_dds_res[which(Ep_dds_res$padj < 0.05), ]
+
+# Convert to dataframe
+Ep_sig_res_df <- as.data.frame(Ep_sig_res)
 ```
 

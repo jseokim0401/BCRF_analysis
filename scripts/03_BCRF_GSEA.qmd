@@ -1,0 +1,18 @@
+---
+title: "03_BCRF_GSEA"
+format: gfm
+---
+
+# 03_BCRF_GSEA
+
+## Set-up to run GSEA
+
+```{r}
+# Load libraries
+library(readr)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(enrichplot)
+library(ggplot2)
+```
+
