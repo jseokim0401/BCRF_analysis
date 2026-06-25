@@ -1,0 +1,145 @@
+---
+title: "02_BCRF_DESeq2"
+format: gfm
+---
+
+# 02_BCRF_DESeq2
+
+The goal of this script will be to run DESeq2 for several comparisons in the BCRF dataset including:
+
+- Epithelial v. Stromal Samples (Ep v. Str)
+
+- Epithelial normal v. Epithelial Invasive (Ep NL v. Ep Invasive)
+
+- Stromal Normal v. Stromal Invasive (Str NL v. Str Invasive)
+
+### Set-up to run DESeq2
+
+```{r}
+# Load libraries
+library(Seurat)
+library(DESeq2)
+
+options(Seurat.object.assay.version = "v5")
+```
+
+```{r}
+# Import data
+BCRF <- readRDS("data/integrated_BCRF_set_1-10_&_EN.rds")
+```
+
+```{r}
+# Join counts layers from BCRF RNA set 1-3 and BCRF RNA set 4-10
+joined_BCRF <- JoinLayers(BCRF)
+```
+
+```{r}
+# Extract raw counts matrix from BCRF data
+# counts <- GetAssayData(joined_BCRF, assay = "RNA", layer = "counts")
+```
+
+### Ep v. Str (pseudobulk)
+
+```{r}
+# Subset BCRF data to omit "NA", "Mix", and "EMT" tissue types 
+subsetted_BCRF <- subset(
+  joined_BCRF,
+  subset = tissue %in% c("Ep", "Str")
+  )
+```
+
+```{r}
+# Extract counts matrix from BCRF data 
+# Pseudobulk to sum gene counts for all cells from same sample (patient) for each cell type (tissue)
+Ep_Str_pb_counts <- AggregateExpression(
+  subsetted_BCRF, 
+  assays = "RNA", 
+  group.by = c("patient", "tissue") # From meta.data 
+)
+
+Ep_Str_pb_counts_mat <- Ep_Str_pb_counts$RNA
+```
+
+```{r}
+# Build colData 
+# Select samples data from pseudobulk, will be identified by patient, tissue type i.e. g683_Str
+Ep_Str_selected_samples <- colnames(Ep_Str_pb_counts_mat)
+
+# Parse patient + tissue into separate columns
+Ep_Str_pb_counts_parsed <- do.call(rbind, strsplit(Ep_Str_selected_samples, "_"))
+colnames(Ep_Str_pb_counts_parsed) <- c("patient", "tissue")
+
+# Remove g prefix from patient 
+Ep_Str_pb_counts_parsed[, "patient"] <- sub("^g", "", Ep_Str_pb_counts_parsed[, "patient"])
+```
+
+```{r}
+# Build colData
+Ep_Str_pb_coldata <- data.frame(
+  patient = factor(Ep_Str_pb_counts_parsed[, "patient"]), # Treat patient as categorical variable
+  tissue = factor(Ep_Str_pb_counts_parsed[, "tissue"], levels = c("Ep", "Str")),
+  row.names = Ep_Str_selected_samples
+)
+```
+
+```{r}
+# Create DESeqDataSet from subset counts and group information 
+Ep_Str_dds <- DESeqDataSetFromMatrix(
+  countData = Ep_Str_pb_counts_mat,
+  colData = Ep_Str_pb_coldata, 
+  design = ~ patient + tissue 
+)
+```
+
+```{r}
+# Filter to keep genes with at least 10 counts 
+Ep_Str_dds_keep <- rowSums(counts(Ep_Str_dds)) >= 10
+Ep_Str_dds <- Ep_Str_dds[Ep_Str_dds_keep,]
+```
+
+```{r}
+# Run DESeq
+Ep_Str_dds <- DESeq(Ep_Str_dds)
+```
+
+
+
+### Ep v. Str (non-pb)
+
+```{r}
+# Define groups 
+# Subset metadata 
+Ep_Str_metadata <- joined_BCRF@meta.data
+
+# Select samples with Ep or Str tissue labels 
+# Omitted "NA", "Mix", "EMT" labels 
+Ep_Str_selected_samples <- rownames(Ep_Str_metadata)[Ep_Str_metadata$tissue %in% c("Ep", "Str")]
+
+# Subset counts matrix to include only the selected samples
+Ep_Str_subset_counts <- counts[, Ep_Str_selected_samples]
+
+# Create subset group 
+Ep_Str_subset_group <- factor(
+  Ep_Str_metadata[Ep_Str_selected_samples, "tissue"],
+  levels = c("Ep", "Str")
+)
+```
+
+```{r}
+# Create DESeqDataSet from subset counts and group information 
+Ep_Str_dds <- DESeqDataSetFromMatrix(
+  countData = Ep_Str_subset_counts,
+  colData = data.frame(
+    group = Ep_Str_subset_group,
+    row.names = colnames(Ep_Str_subset_counts)), # Make row names of colData explicit  
+  design = ~group 
+)
+```
+
+
+```{r}
+# Run DESeq2 analysis 
+Ep_Str_dds_object <- DESeq(Ep_Str_dds)
+```
+
+
