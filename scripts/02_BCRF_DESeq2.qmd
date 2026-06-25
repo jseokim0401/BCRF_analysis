@@ -19,6 +19,8 @@ The goal of this script will be to run DESeq2 for several comparisons in the BCR
 # Load libraries
 library(Seurat)
 library(DESeq2)
+library(BiocParallel)
+register(MulticoreParam(8))
 
 options(Seurat.object.assay.version = "v5")
 ```
@@ -42,7 +44,7 @@ joined_BCRF <- JoinLayers(BCRF)
 
 ```{r}
 # Subset BCRF data to omit "NA", "Mix", and "EMT" tissue types 
-subsetted_BCRF <- subset(
+Ep_Str_subsetted_BCRF <- subset(
   joined_BCRF,
   subset = tissue %in% c("Ep", "Str")
   )
@@ -102,8 +104,6 @@ Ep_Str_dds <- Ep_Str_dds[Ep_Str_dds_keep,]
 Ep_Str_dds <- DESeq(Ep_Str_dds)
 ```
 
-
-
 ### Ep v. Str (non-pb)
 
 ```{r}
@@ -136,10 +136,78 @@ Ep_Str_dds <- DESeqDataSetFromMatrix(
 )
 ```
 
-
 ```{r}
 # Run DESeq2 analysis 
 Ep_Str_dds_object <- DESeq(Ep_Str_dds)
 ```
 
+### Ep NL v. Ep Invasive 
+
+```{r}
+# Subset BCRF data to omit dxs that are not "NL" or "Invasive" 
+Ep_subsetted_BCRF <- subset(
+  joined_BCRF,
+  subset = dxs %in% c("NL", "Invasive")
+  )
+
+# Subset BCRF data to select only "Ep" tissue samples 
+Ep_subsetted_BCRF <- subset(
+  Ep_subsetted_BCRF, 
+  subset = tissue %in% "Ep"
+)
+```
+
+```{r}
+# Extract counts matrix from BCRF data 
+# Pseudobulk to sum gene counts for all cells from same sample (patient) for each cell type (tissue)
+Ep_pb_counts <- AggregateExpression(
+  Ep_subsetted_BCRF, 
+  assays = "RNA", 
+  group.by = c("patient", "dxs") # From meta.data 
+)
+
+Ep_pb_counts_mat <- Ep_pb_counts$RNA
+```
+
+```{r}
+# Build colData 
+# Select samples data from pseudobulk, will be identified by patient, tissue type i.e. g683_Str
+Ep_selected_samples <- colnames(Ep_pb_counts_mat)
+
+# Parse patient + tissue into separate columns
+Ep_pb_counts_parsed <- do.call(rbind, strsplit(Ep_selected_samples, "_"))
+colnames(Ep_pb_counts_parsed) <- c("patient", "dxs")
+
+# Remove g prefix from patient 
+Ep_pb_counts_parsed[, "patient"] <- sub("^g", "", Ep_pb_counts_parsed[, "patient"])
+```
+
+```{r}
+# Build colData
+Ep_pb_coldata <- data.frame(
+  patient = factor(Ep_pb_counts_parsed[, "patient"]), # Treat patient as categorical variable
+  dxs = factor(Ep_pb_counts_parsed[, "dxs"], levels = c("NL", "Invasive")),
+  row.names = Ep_selected_samples
+)
+```
+
+```{r}
+# Create DESeqDataSet from subset counts and group information 
+Ep_dds <- DESeqDataSetFromMatrix(
+  countData = Ep_pb_counts_mat,
+  colData = Ep_pb_coldata, 
+  design = ~ patient + dxs
+)
+```
+
+```{r}
+# Filter to keep genes with at least 10 counts 
+Ep_dds_keep <- rowSums(counts(Ep_dds)) >= 10
+Ep_dds <- Ep_dds[Ep_dds_keep,]
+```
+
+```{r}
+# Run DESeq
+Ep_dds <- DESeq(Ep_dds, parallel = TRUE)
+```
 
