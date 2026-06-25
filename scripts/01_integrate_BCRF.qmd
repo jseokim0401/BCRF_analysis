@@ -1,7 +1,9 @@
 ---
-title: 01_integrate_BCRF
+title: "01_integrate_BCRF"
 format: gfm
 ---
+
+# 01_integrate_BCRF
 
 Combine v1 and v2 using seurat v5 rpca integration, did not do any other testing- Magda
 combine v1 and v2, need batch correction, check w pca/ clustering - Siri
@@ -9,10 +11,10 @@ S3S v2 has more reads
 
 KEEP/ From TBCRCn, RAHBTn, COMETn
 
+### Set-up 
 
 ```{r}
 # Load libraries
-# renv::install(c("future","Seurat","Matrix", "ggplot2"))
 library(future)
 library(Seurat)
 library(Matrix)
@@ -20,11 +22,17 @@ library(ggplot2)
 ```
 
 ```{r}
-
+# Set global options 
+options(future.globals.maxSize = Inf)
+print(getOption("future.globals.maxSize"))
 ```
 
+### Elaine's work on integrating BCRF dataset
+
+This is how Elaine integrated the final BCRF dataset as far as I can tell 
 
 ```{r}
+#| eval: FALSE 
 options(future.globals.maxSize = Inf)
 
 print(getOption("future.globals.maxSize"))
@@ -41,7 +49,11 @@ BCRF4_10n <- BCRF_set4_10
 obj <- merge(x = BCRF1_3n,
              y = list(BCRF4_10n), 
              add.cell.ids = c('BCRF1_3&EN','BCRF4_10'))
+```
 
+
+```{r}
+#| eval: FALSE
 # Assign dataset labels
 # obj$dataset = sapply(Cells(obj), function(x) strsplit(x, '_')[[1]][1])
 
@@ -70,9 +82,13 @@ obj <- RunUMAP(obj, reduction = "integrated.rpca", dims = 1:30, reduction.name =
 # obj <- JoinLayers(obj) # Join layers if needed
 # KEEP 
 
+saveRDS(obj, file = "/Users/eguo/Downloads/integrated_BCRF_set_1-10_&_EN.rds")
+```
 
+Elaine's plot work.
 
-##########
+```{r}
+#| eval: FALSE
 
 setwd("/Users/eguo/Downloads/integrated BCRF set 1-10 & EN")
 
@@ -112,21 +128,59 @@ ggsave("log2counts.png", width = 8, height = 8)
 
 FeaturePlot(obj, features = c("ESR1", "ERBB2", "MYC", "TP53", "PIK3CA"), cols = c("red", "blue"))
 ggsave("genes.png", width = 8, height = 8)
+```
 
-saveRDS(obj, file = "/Users/eguo/Downloads/integrated_BCRF_set_1-10_&_EN.rds")
+### UMAPs
+
+```{r}
+DimPlot(joined_BCRF, reduction = "umap.rpca", label = TRUE)
+
+joined_BCRF$tissue[is.na(joined_BCRF$tissue)] <- 'NA'
+DimPlot(joined_BCRF, reduction = "umap.rpca", label = TRUE, group.by = "tissue")
+
+DimPlot(joined_BCRF, reduction = "umap.rpca", group.by = "protocol")
+
+DimPlot(joined_BCRF, reduction = "umap.rpca", group.by = "dxs")
+
+DimPlot(joined_BCRF, reduction = "umap.rpca", group.by = "dx")
+
+n_patients <- length(unique(joined_BCRF$patient))
+DimPlot(joined_BCRF, reduction = "umap.rpca", group.by = "patient") +
+  ggtitle(paste("n patients = ", n_patients))
+
+DimPlot(joined_BCRF, reduction = "umap.rpca", group.by = "sequence batch number")
+```
+
+```{r}
+# log2 of total counts (library size) per sample
+joined_BCRF$log2counts <- log2(joined_BCRF$nCount_RNA + 1)
+log2counts <- FeaturePlot(joined_BCRF,
+            features = "log2counts",
+            combine = TRUE, 
+            label.size = 1) 
+print(log2counts)
+
+FeaturePlot(joined_BCRF, features = c("ESR1", "ERBB2", "MYC", "TP53", "PIK3CA"), cols = c("red", "blue"))
+```
+
+### Finding cluster markers
 
 
+```{r}
+BCRF <- readRDS("../data/integrated_BCRF_set_1-10_&_EN.rds")
+```
 
-
-#########
-cluster_markers_all <- FindAllMarkers(obj, 
+```{r}
+cluster_markers_all <- FindAllMarkers(joined_BCRF, 
                        only.pos = FALSE,  # Includes both pos and neg markers
                        min.pct = 0.1,     # Genes must be expressed in min 10% of samples in a cluster
                        logfc.threshold = 0.25,  # LFC threshold
-                       test.use = DESeq2)
+                       test.use = "DESeq2")
 
 head(cluster_markers_all)
+```
 
+```{r}
 # Filter by adj pval and Log2FC
 cluster_markers_filtered <- cluster_markers_all %>%
   filter(p_val_adj < 0.05)
@@ -137,8 +191,4 @@ top_genes_per_cluster <- cluster_markers_filtered %>%
   top_n(100, wt = abs(avg_log2FC)) %>%           # Select top DE genes by avg_log2FC for each cluster
   ungroup()
 
-
-
-
 ```
-
