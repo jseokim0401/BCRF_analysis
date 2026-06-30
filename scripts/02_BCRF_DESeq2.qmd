@@ -20,7 +20,7 @@ The goal of this script will be to run DESeq2 for several comparisons in the BCR
 library(Seurat)
 library(DESeq2)
 library(BiocParallel)
-register(MulticoreParam(7))
+register(SnowParam(7))
 library(tidyverse)
 library(EnhancedVolcano)
 
@@ -37,7 +37,214 @@ BCRF <- readRDS("data/integrated_BCRF_set_1-10_&_EN.rds")
 joined_BCRF <- JoinLayers(BCRF)
 ```
 
-## Ep v. Str (pseudobulk)
+## Ep v. Str
+
+```{r}
+# Subset BCRF data to omit "NA", "Mix", and "EMT" tissue types 
+Ep_Str_subsetted_BCRF <- subset(
+  joined_BCRF,
+  subset = tissue %in% c("Ep", "Str")
+  )
+
+# Get counts data 
+Ep_Str_counts <- GetAssayData(Ep_Str_subsetted_BCRF, assay = "RNA", layer = "counts")
+
+# Build colData from meta.data
+Ep_Str_coldata <- data.frame(
+  patient = factor(Ep_Str_subsetted_BCRF@meta.data$patient), 
+  tissue = factor(Ep_Str_subsetted_BCRF@meta.data$tissue, levels = c("Ep", "Str")),
+  row.names = colnames(Ep_Str_counts)
+)
+```
+
+```{r}
+# Create DESeqDataSet from subset counts and group information 
+Ep_Str_dds <- DESeqDataSetFromMatrix(
+  countData = Ep_Str_counts,
+  colData = Ep_Str_coldata, 
+  design = ~ patient + tissue 
+)
+```
+
+```{r}
+# Keep genes with at least 1 count in at least 10 cells
+Ep_Str_dds_keep <- rowSums(counts(Ep_Str_dds) >= 1) >= 10
+Ep_Str_dds <- Ep_Str_dds[Ep_Str_dds_keep,]
+```
+
+```{r}
+Ep_Str_dds <- DESeq(Ep_Str_dds, sfType = "poscounts", parallel = TRUE)
+```
+
+```{r}
+# Troubleshooting
+
+# Check which samples have NA size factors
+sf <- sizeFactors(Ep_Str_dds)
+sum(is.na(Ep_Str_dds))
+which(is.na(Ep_Str_dds))
+
+# Look at total counts per sample
+colSums(counts(Ep_Str_dds))[is.na(sf)]
+
+```
+
+
+## Ep NL v. Ep Invasive 
+
+```{r}
+# Subset BCRF data to omit dxs that are not "NL" or "Invasive"
+NL_Inv_subsetted_BCRF <- subset(
+  joined_BCRF,
+  subset = dxs %in% c("NL", "Invasive")
+  )
+
+# Subset BCRF data to only include "Ep" tissue samples
+EpNL_EpInv_subsetted_BCRF <- subset(
+  NL_Inv_subsetted_BCRF,
+  subset = tissue %in% "Ep"
+)
+
+# Get counts data 
+EpNL_EpInv_counts <- GetAssayData(EpNL_EpInv_subsetted_BCRF, assay = "RNA", layer = "counts")
+
+# Build colData from meta.data
+EpNL_EpInv_coldata <- data.frame(
+  patient = factor(EpNL_EpInv_subsetted_BCRF@meta.data$patient), 
+  dxs = factor(EpNL_EpInv_subsetted_BCRF@meta.data$dxs, levels = c("NL", "Invasive")),
+  row.names = colnames(EpNL_EpInv_counts)
+)
+```
+
+```{r}
+# Create DESeqDataSet from subset counts and group information 
+EpNL_EpInv_dds <- DESeqDataSetFromMatrix(
+  countData = EpNL_EpInv_counts,
+  colData = EpNL_EpInv_coldata, 
+  design = ~ patient + dxs 
+)
+```
+
+```{r}
+# Keep genes with at least 1 count in at least 10 cells
+EpNL_EpInv_dds_keep <- rowSums(counts(EpNL_EpInv_dds) >= 1) >= 10
+EpNL_EpInv_dds <- EpNL_EpInv_dds[EpNL_EpInv_dds_keep,]
+```
+
+```{r}
+# Run DEseq
+EpNL_EpInv_dds <- DESeq(EpNL_EpInv_dds, parallel = TRUE)
+```
+
+```{r}
+# Save DESeq dds 
+saveRDS(EpNL_EpInv_dds, "data/DESeq2/EpNL_EpInv_dds.rds")
+```
+
+```{r}
+# Save DESeq results 
+EpNL_EpInv_dds_res <- results(EpNL_EpInv_dds, contrast = c("dxs", "NL", "Invasive"))
+summary(EpNL_EpInv_dds_res)
+
+# Convert results to dataframe
+EpNL_EpInv_dds_df <- EpNL_EpInv_dds_res |>
+  as.data.frame() |>
+  rownames_to_column(var = "Gene") # Make column for gene ids 
+
+# Save results 
+write.csv(EpNL_EpInv_dds_df, "data/DESeq2/EpNL_EpInv_res.csv")
+```
+
+### Downstream Analyses & Volcano Plot 
+
+```{r}
+#| eval: FALSE 
+# Filter for significant results (adjusted p-value < 0.05)
+EpNL_EpInv_sig_res <- EpNL_EpInv_dds_res[which(EpNL_EpInv_dds_res$padj < 0.05), ]
+
+# Convert to dataframe
+EpNL_EpInv_sig_res_df <- as.data.frame(EpNL_EpInv_sig_res)
+```
+
+```{r}
+EpNL_EpInv_res <- read.csv("data/DESeq2/EpNL_EpInv_res.csv")
+EpNL_EpInv_pb_res <- read.csv("data/DESeq2/EpNL_EpInv_pb_res.csv")
+```
+
+```{r}
+# Comparing non-pseudobulk and pseudobulk pipelines; looks pretty similar on initial glance 
+head(EpNL_EpInv_res)
+head(EpNL_EpInv_pb_res)
+```
+
+```{r}
+EpNL_EpInv_VP <- EnhancedVolcano(EpNL_EpInv_res,
+  x = "log2FoldChange", # fold change statistic to plot
+  y = "pvalue", # significance values
+  lab = EpNL_EpInv_res$Gene, # labels for points
+  pCutoff = 1e-05, # The p value cutoff we will use (default)
+  FCcutoff = 1, # The fold change cutoff (default)
+  title = "Genes differentially expressed in Ep Invasive relative to Ep NL", # add title
+  caption = NULL,
+  labSize = 1.5 # smaller labels
+) +
+  # change the overall theme
+  theme_classic() +
+  # move the legend to the bottom
+  theme(legend.position = "bottom")
+
+# Save plots as .png
+ggsave("EpNL_EpInv_VP.png", EpNL_EpInv_VP, path = "plots/DESeq2")
+```
+
+## Str NL v. Str Invasive 
+
+```{r}
+# Subset BCRF data to omit dxs that are not "NL" or "Invasive"
+NL_Inv_subsetted_BCRF <- subset(
+  joined_BCRF,
+  subset = dxs %in% c("NL", "Invasive")
+  )
+
+# Subset BCRF data to only include "Str" tissue samples
+StrNL_StrInv_subsetted_BCRF <- subset(
+  NL_Inv_subsetted_BCRF,
+  subset = tissue %in% "Str"
+)
+
+# Get counts data 
+StrNL_StrInv_counts <- GetAssayData(StrNL_StrInv_subsetted_BCRF, assay = "RNA", layer = "counts")
+
+# Build colData from meta.data
+StrNL_StrInv_coldata <- data.frame(
+  patient = factor(StrNL_StrInv_subsetted_BCRF@meta.data$patient), 
+  dxs = factor(StrNL_StrInv_subsetted_BCRF@meta.data$dxs, levels = c("NL", "Invasive")),
+  row.names = colnames(StrNL_StrInv_counts)
+)
+```
+
+```{r}
+# Create DESeqDataSet from subset counts and group information 
+StrNL_StrInv_dds <- DESeqDataSetFromMatrix(
+  countData = StrNL_StrInv_counts,
+  colData = StrNL_StrInv_coldata, 
+  design = ~ patient + dxs 
+)
+```
+
+```{r}
+# Keep genes with at least 1 count in at least 10 cells
+StrNL_StrInv_dds_keep <- rowSums(counts(StrNL_StrInv_dds) >= 1) >= 10
+StrNL_StrInv_dds <- StrNL_StrInv_dds[StrNL_StrInv_dds_keep,]
+```
+
+```{r}
+StrNL_StrInv_dds <- DESeq(StrNL_StrInv_dds, parallel = TRUE)
+```
+
+# Pseudobulking lol TT.TT
+
+## Ep v. Str
 
 ```{r}
 # Subset BCRF data to omit "NA", "Mix", and "EMT" tissue types 
@@ -101,94 +308,18 @@ Ep_Str_dds <- Ep_Str_dds[Ep_Str_dds_keep,]
 Ep_Str_dds <- DESeq(Ep_Str_dds)
 ```
 
-## Ep v. Str (working)
-
-```{r}
-# Subset BCRF data to omit "NA", "Mix", and "EMT" tissue types 
-Ep_Str_subsetted_BCRF <- subset(
-  joined_BCRF,
-  subset = tissue %in% c("Ep", "Str")
-  )
-
-# Get counts data 
-Ep_Str_counts <- GetAssayData(Ep_Str_subsetted_BCRF, assay = "RNA", layer = "counts")
-
-# Build colData from meta.data
-Ep_Str_coldata <- data.frame(
-  patient = factor(Ep_Str_subsetted_BCRF@meta.data$patient), 
-  tissue = factor(Ep_Str_subsetted_BCRF@meta.data$tissue, levels = c("Ep", "Str")),
-  row.names = colnames(Ep_Str_counts)
-)
-```
-
-```{r}
-# Create DESeqDataSet from subset counts and group information 
-Ep_Str_dds <- DESeqDataSetFromMatrix(
-  countData = Ep_Str_counts,
-  colData = Ep_Str_coldata, 
-  design = ~ patient + tissue 
-)
-```
-
-```{r}
-# Keep genes with at least 1 count in at least 10 cells
-Ep_Str_dds_keep <- rowSums(counts(Ep_Str_dds) >= 1) >= 10
-Ep_Str_dds <- Ep_Str_dds[Ep_Str_dds_keep,]
-```
-
-```{r}
-Ep_Str_dds <- DESeq(Ep_Str_dds, parallel = TRUE)
-```
-
-## Ep v. Str (non-pb) OLD BAD 
-
-```{r}
-# Define groups 
-# Subset metadata 
-Ep_Str_metadata <- joined_BCRF@meta.data
-
-# Select samples with Ep or Str tissue labels 
-# Omitted "NA", "Mix", "EMT" labels 
-Ep_Str_selected_samples <- rownames(Ep_Str_metadata)[Ep_Str_metadata$tissue %in% c("Ep", "Str")]
-
-# Subset counts matrix to include only the selected samples
-Ep_Str_subset_counts <- counts[, Ep_Str_selected_samples]
-
-# Create subset group 
-Ep_Str_subset_group <- factor(
-  Ep_Str_metadata[Ep_Str_selected_samples, "tissue"],
-  levels = c("Ep", "Str")
-)
-```
-
-```{r}
-# Create DESeqDataSet from subset counts and group information 
-Ep_Str_dds <- DESeqDataSetFromMatrix(
-  countData = Ep_Str_subset_counts,
-  colData = data.frame(
-    group = Ep_Str_subset_group,
-    row.names = colnames(Ep_Str_subset_counts)), # Make row names of colData explicit  
-  design = ~group 
-)
-```
-
-```{r}
-# Run DESeq2 analysis 
-Ep_Str_dds_object <- DESeq(Ep_Str_dds)
-```
-
-## Ep NL v. Ep Invasive 
+## Ep NL v. Ep Invasive
 
 ```{r}
 # Subset BCRF data to omit dxs that are not "NL" or "Invasive" 
-Ep_subsetted_BCRF <- subset(
+NL_Inv_subsetted_BCRF <- subset(
   joined_BCRF,
   subset = dxs %in% c("NL", "Invasive")
   )
 
 # Subset BCRF data to select only "Ep" tissue samples 
-Ep_subsetted_BCRF <- subset(
-  Ep_subsetted_BCRF, 
+EpNL_EpInv_subsetted_BCRF <- subset(
+  NL_Inv_subsetted_BCRF, 
   subset = tissue %in% "Ep"
 )
 ```
@@ -196,74 +327,74 @@ Ep_subsetted_BCRF <- subset(
 ```{r}
 # Extract counts matrix from BCRF data 
 # Pseudobulk to sum gene counts for all cells from same sample (patient) for each cell type (tissue)
-Ep_pb_counts <- AggregateExpression(
-  Ep_subsetted_BCRF, 
+EpNL_EpInv_pb_counts <- AggregateExpression(
+  EpNL_EpInv_subsetted_BCRF, 
   assays = "RNA", 
   group.by = c("patient", "dxs") # From meta.data 
 )
 
-Ep_pb_counts_mat <- Ep_pb_counts$RNA
+EpNL_EpInv_pb_counts_mat <- EpNL_EpInv_pb_counts$RNA
 ```
 
 ```{r}
 # Build colData 
 # Select samples data from pseudobulk, will be identified by patient, tissue type i.e. g683_Str
-Ep_selected_samples <- colnames(Ep_pb_counts_mat)
+EpNL_EpInv_selected_samples <- colnames(EpNL_EpInv_pb_counts_mat)
 
 # Parse patient + tissue into separate columns
-Ep_pb_counts_parsed <- do.call(rbind, strsplit(Ep_selected_samples, "_"))
-colnames(Ep_pb_counts_parsed) <- c("patient", "dxs")
+EpNL_EpInv_pb_counts_parsed <- do.call(rbind, strsplit(EpNL_EpInv_selected_samples, "_"))
+colnames(EpNL_EpInv_pb_counts_parsed) <- c("patient", "dxs")
 
 # Remove g prefix from patient 
-Ep_pb_counts_parsed[, "patient"] <- sub("^g", "", Ep_pb_counts_parsed[, "patient"])
+EpNL_EpInv_pb_counts_parsed[, "patient"] <- sub("^g", "", EpNL_EpInv_pb_counts_parsed[, "patient"])
 ```
 
 ```{r}
 # Build colData
-Ep_pb_coldata <- data.frame(
-  patient = factor(Ep_pb_counts_parsed[, "patient"]), # Treat patient as categorical variable
-  dxs = factor(Ep_pb_counts_parsed[, "dxs"], levels = c("NL", "Invasive")),
-  row.names = Ep_selected_samples
+EpNL_EpInv_pb_coldata <- data.frame(
+  patient = factor(EpNL_EpInv_pb_counts_parsed[, "patient"]), # Treat patient as categorical variable
+  dxs = factor(EpNL_EpInv_pb_counts_parsed[, "dxs"], levels = c("NL", "Invasive")),
+  row.names = EpNL_EpInv_selected_samples
 )
 ```
 
 ```{r}
 # Create DESeqDataSet from subset counts and group information 
-Ep_dds <- DESeqDataSetFromMatrix(
-  countData = Ep_pb_counts_mat,
-  colData = Ep_pb_coldata, 
+EpNL_EpInv_pb_dds <- DESeqDataSetFromMatrix(
+  countData = EpNL_EpInv_pb_counts_mat,
+  colData = EpNL_EpInv_pb_coldata, 
   design = ~ patient + dxs
 )
 ```
 
 ```{r}
 # Filter to keep genes with at least 10 counts 
-Ep_dds_keep <- rowSums(counts(Ep_dds)) >= 10
-Ep_dds <- Ep_dds[Ep_dds_keep,]
+EpNL_EpInv_pb_dds_keep <- rowSums(counts(EpNL_EpInv_dds)) >= 10
+EpNL_EpInv_dds <- EpNL_EpInv_dds[EpNL_EpInv_pb_dds_keep,]
 ```
 
 ```{r}
 # Run DESeq
-Ep_dds <- DESeq(Ep_dds, parallel = TRUE)
+EpNL_EpInv_pb_dds <- DESeq(EpNL_EpInv_pb_dds, parallel = TRUE)
 ```
 
 ```{r}
 # Save DESeq dds 
-saveRDS(Ep_dds, "data/DESeq2/EpNL_EpInv_dds.rds")
+saveRDS(EpNL_EpInv_pb_dds, "data/DESeq2/EpNL_EpInv_pb_dds.rds")
 ```
 
 ```{r}
 # Save DESeq results 
-Ep_dds_res <- results(Ep_dds, contrast = c("dxs", "NL", "Invasive"))
-summary(Ep_dds_res)
+EpNL_EpInv_pb_dds_res <- results(EpNL_EpInv_pb_dds, contrast = c("dxs", "NL", "Invasive"))
+summary(EpNL_EpInv_pb_dds_res)
 
 # Convert results to dataframe
-Ep_dds_res_df <- Ep_dds_res |>
+EpNL_EpInv_pb_dds_res_df <- EpNL_EpInv_pb_dds_res |>
   as.data.frame() |>
   rownames_to_column(var = "Gene") # Make column for gene ids 
 
 # Save results 
-write.csv(Ep_dds_res_df, "data/DESeq2/EpNL_EpInv_res.csv")
+write.csv(EpNL_EpInv_pb_dds_res_df, "data/DESeq2/EpNL_EpInv_pb_res.csv")
 ```
 
 ```{r}
@@ -277,10 +408,10 @@ Ep_sig_res_df <- as.data.frame(Ep_sig_res)
 ### Volcano Plot
 
 ```{r}
-EpNL_EpInv_VP <- EnhancedVolcano(Ep_dds_res_df,
+EpNL_EpInv_pb_VP <- EnhancedVolcano(EpNL_EpInv_pb_res,
   x = "log2FoldChange", # fold change statistic to plot
   y = "pvalue", # significance values
-  lab = Ep_dds_res_df$Gene, # labels for points
+  lab = EpNL_EpInv_pb_res$Gene, # labels for points
   pCutoff = 1e-05, # The p value cutoff we will use (default)
   FCcutoff = 1, # The fold change cutoff (default)
   title = "Genes differentially expressed in Ep Invasive relative to Ep NL", # add title
@@ -293,5 +424,5 @@ EpNL_EpInv_VP <- EnhancedVolcano(Ep_dds_res_df,
   theme(legend.position = "bottom")
 
 # Save plots as .png
-ggsave("EpNL_EpInv_VP.png", EpNL_EpInv_VP, path = "plots/DESeq2")
+ggsave("EpNL_EpInv_pb_VP.png", EpNL_EpInv_pb_VP, path = "plots/DESeq2")
 ```
