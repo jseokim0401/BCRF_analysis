@@ -20,7 +20,7 @@ The goal of this script will be to run DESeq2 for several comparisons in the BCR
 library(Seurat)
 library(DESeq2)
 library(BiocParallel)
-register(SnowParam(7))
+register(SnowParam(5))
 library(tidyverse)
 library(EnhancedVolcano)
 
@@ -29,7 +29,7 @@ options(Seurat.object.assay.version = "v5")
 
 ```{r}
 # Import data
-BCRF <- readRDS("data/integrated_BCRF_set_1-10_&_EN.rds")
+BCRF <- readRDS("../data/integrated_BCRF_set_1-10_&_EN.rds")
 ```
 
 ```{r}
@@ -136,14 +136,10 @@ EpNL_EpInv_dds <- DESeq(EpNL_EpInv_dds, parallel = TRUE)
 ```
 
 ```{r}
-# Save DESeq dds 
-saveRDS(EpNL_EpInv_dds, "data/DESeq2/EpNL_EpInv_dds.rds")
-```
-
-```{r}
 # Save DESeq results 
 EpNL_EpInv_dds_res <- results(EpNL_EpInv_dds, contrast = c("dxs", "Invasive", "NL"))
 summary(EpNL_EpInv_dds_res)
+saveRDS(EpNL_EpInv_dds_res, "data/DESeq2/EpNL_EpInv_dds_res.rds")
 
 # Convert results to dataframe
 EpNL_EpInv_dds_df <- EpNL_EpInv_dds_res |>
