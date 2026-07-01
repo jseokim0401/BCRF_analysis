@@ -35,7 +35,7 @@ library(ggplotify)
 ```{r}
 # Prepare data 
 # Load in data 
-EpNL_EpInv <- read.csv("data/DESeq2/EpNL_EpInv_res.csv", row.names = 1)
+EpNL_EpInv <- read.csv("../data/DESeq2/EpNL_EpInv_res.csv", row.names = 1)
 ```
 
 ```{r}
@@ -91,11 +91,11 @@ EpNL_EpInv_gsea_BP_readable <- clusterProfiler::setReadable(
   keyType = "ENTREZID"
   )
 
-saveRDS(EpNL_EpInv_gsea_BP_readable, "data/GSEA/EpNL_EpInv_gsea_res_BP.rds")
+saveRDS(EpNL_EpInv_gsea_BP_readable, "../data/GSEA/EpNL_EpInv_gsea_res_BP.rds")
 
-# Convert gseaResult object into dataframe
+2# Convert gseaResult object into dataframe
 EpNL_EpInv_gsea_res_BP_df <- as.data.frame(EpNL_EpInv_gsea_BP_readable)
-write_csv(EpNL_EpInv_gsea_res_BP_df, "data/GSEA/EpNL_EpInv_gsea_res_BP.csv")
+write_csv(EpNL_EpInv_gsea_res_BP_df, "../data/GSEA/EpNL_EpInv_gsea_res_BP.csv")
 ```
 
 ### Visualization (BP)
@@ -106,7 +106,7 @@ EpNL_EpInv_dotplot_BP <- dotplot(EpNL_EpInv_gsea_res_BP, showCategory = 15) +
   ggtitle("Top 15 GO Terms from GSEA\nin Ep NL v. Ep Inv") +
   theme(axis.text.y = element_text(size = 9, family = "Arial"))
 
-ggsave("EpNL_EpInv_dotplot_BP.png", EpNL_EpInv_dotplot_BP, path = "plots/GSEA",
+ggsave("EpNL_EpInv_dotplot_BP.png", EpNL_EpInv_dotplot_BP, path = "../plots/GSEA",
        width = 6, height = 7, dpi = 300)
 ```
 
@@ -133,7 +133,7 @@ EpNL_EpInv_barplot_BP <- EpNL_EpInv_top10_updown_BP |>
   labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Top 10 Upregulated and Downregulated \nPathways in Ep Inv Over Ep NL") +
   theme_bw() 
   
-ggsave("EpNL_EpInv_barplot_BP.png", EpNL_EpInv_barplot_BP, path = "plots/GSEA",
+ggsave("EpNL_EpInv_barplot_BP.png", EpNL_EpInv_barplot_BP, path = "../plots/GSEA",
        width = 9, height = 6, dpi = 300)
 ```
 
@@ -145,7 +145,7 @@ EpNL_EpInv_cnetplot_BP <- enrichplot::cnetplot(
   showCategory = 5
   ) 
 
-ggsave("EpNL_EpInv_cnetplot_BP.png", EpNL_EpInv_cnetplot_BP, path = "plots/GSEA",
+ggsave("EpNL_EpInv_cnetplot_BP.png", EpNL_EpInv_cnetplot_BP, path = "../plots/GSEA",
        width = 12, height = 8, dpi = 300)
 ```
 
@@ -193,7 +193,7 @@ EpNL_EpInv_upset_BP <- upset(
 
 ggsave("EpNL_EpInv_upset_BP.png",
        plot = as.ggplot(EpNL_EpInv_upset_BP),
-       path = "plots/GSEA",
+       path = "../plots/GSEA",
        width = 8,
        height = 10,
        dpi = 300)
@@ -249,11 +249,11 @@ EpNL_EpInv_gsea_HM_readable@result <- EpNL_EpInv_gsea_HM_readable@result |>
       .before = 1                          # Put new Pathway column at front
   )
 
-saveRDS(EpNL_EpInv_gsea_HM_readable, "data/GSEA/EpNL_EpInv_gsea_res_HM.rds")
+saveRDS(EpNL_EpInv_gsea_HM_readable, "../data/GSEA/EpNL_EpInv_gsea_res_HM.rds")
 
 # Convert gseaResult object into dataframe
 EpNL_EpInv_gsea_res_HM_df <- as.data.frame(EpNL_EpInv_gsea_HM_readable)
-write_csv(EpNL_EpInv_gsea_res_HM_df, "data/GSEA/EpNL_EpInv_gsea_res_HM.csv")
+write_csv(EpNL_EpInv_gsea_res_HM_df, "../data/GSEA/EpNL_EpInv_gsea_res_HM.csv")
 ```
 
 ### Visualization (HM) 
@@ -264,7 +264,7 @@ EpNL_EpInv_dotplot_HM <- dotplot(EpNL_EpInv_gsea_res_HM, showCategory = 15) +
   ggtitle("Top 15 GO Terms from GSEA\nin Ep NL v. Ep Inv") +
   theme(axis.text.y = element_text(size = 9, family = "Arial"))
 
-ggsave("EpNL_EpInv_dotplot_HM.png", EpNL_EpInv_dotplot_BP, path = "plots/GSEA",
+ggsave("EpNL_EpInv_dotplot_HM.png", EpNL_EpInv_dotplot_BP, path = "../plots/GSEA",
        width = 6, height = 7, dpi = 300)
 ```
 
@@ -285,13 +285,13 @@ EpNL_EpInv_top10_updown_HM <- bind_rows(EpNL_EpInv_top10_up_HM, EpNL_EpInv_top10
 
 # Generate barplot
 EpNL_EpInv_barplot_HM <- EpNL_EpInv_top10_updown_HM |>
-  ggplot(aes(x = NES, y = reorder(Description, NES), fill = p.adjust)) + 
+  ggplot(aes(x = NES, y = reorder(Pathway, NES), fill = p.adjust)) + 
   geom_col() + 
   scale_fill_gradient(low = "red", high = "blue") +
   labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Top 10 Upregulated and Downregulated \nPathways in Ep Inv Over Ep NL") +
   theme_bw() 
   
-ggsave("EpNL_EpInv_barplot_HM.png", EpNL_EpInv_barplot_HM, path = "plots/GSEA",
+ggsave("EpNL_EpInv_barplot_HM.png", EpNL_EpInv_barplot_HM, path = "../plots/GSEA",
        width = 9, height = 6, dpi = 300)
 ```
 
@@ -303,21 +303,21 @@ EpNL_EpInv_cnetplot_HM <- enrichplot::cnetplot(
   showCategory = 5
   ) 
 
-ggsave("EpNL_EpInv_cnetplot_HM.png", EpNL_EpInv_cnetplot_HM, path = "plots/GSEA",
+ggsave("EpNL_EpInv_cnetplot_HM.png", EpNL_EpInv_cnetplot_HM, path = "../plots/GSEA",
        width = 12, height = 8, dpi = 300)
 ```
 
 ```{r}
 # Upsetplot
-EpNL_EpInv_gsea_top10_HM <- EpNL_EpInv_gsea_res_HM
+EpNL_EpInv_gsea_top10_HM <- EpNL_EpInv_gsea_HM_readable
 
 # Top 5 positively enriched
-top_up_HM <- EpNL_EpInv_gsea_res_HM@result |>
+top_up_HM <- EpNL_EpInv_gsea_HM_readable@result |>
   arrange(desc(NES)) |>
   slice_head(n = 5)
 
 # Top 5 negatively enriched
-top_down_HM <- EpNL_EpInv_gsea_res_HM@result |>
+top_down_HM <- EpNL_EpInv_gsea_HM_readable@result |>
   arrange(NES) |>
   slice_head(n = 5)
 
@@ -326,6 +326,12 @@ EpNL_EpInv_gsea_top10_HM@result <- bind_rows(top_up_HM, top_down_HM)
 
 # Create gene sets for UpSetR input 
 EpNL_EpInv_gene_sets_HM <- geneInCategory(EpNL_EpInv_gsea_top10_HM)
+
+# Add arrows to pathway names
+names(EpNL_EpInv_gene_sets_BP) <- c(
+  paste0("↑ ", top_up_BP$Description),
+  paste0("↓ ", top_down_BP$Description)
+)
 
 # Add arrows to pathway names
 names(EpNL_EpInv_gene_sets_HM) <- c(
@@ -351,7 +357,7 @@ EpNL_EpInv_upset_HM <- upset(
 
 ggsave("EpNL_EpInv_upset_HM.png",
        plot = as.ggplot(EpNL_EpInv_upset_HM),
-       path = "plots/GSEA",
+       path = "../plots/GSEA",
        width = 8,
        height = 10,
        dpi = 300)
