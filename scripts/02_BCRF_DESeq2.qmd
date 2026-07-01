@@ -89,7 +89,6 @@ colSums(counts(Ep_Str_dds))[is.na(sf)]
 
 ```
 
-
 ## Ep NL v. Ep Invasive 
 
 ```{r}
@@ -143,7 +142,7 @@ saveRDS(EpNL_EpInv_dds, "data/DESeq2/EpNL_EpInv_dds.rds")
 
 ```{r}
 # Save DESeq results 
-EpNL_EpInv_dds_res <- results(EpNL_EpInv_dds, contrast = c("dxs", "NL", "Invasive"))
+EpNL_EpInv_dds_res <- results(EpNL_EpInv_dds, contrast = c("dxs", "Invasive", "NL"))
 summary(EpNL_EpInv_dds_res)
 
 # Convert results to dataframe
@@ -239,7 +238,7 @@ StrNL_StrInv_dds <- StrNL_StrInv_dds[StrNL_StrInv_dds_keep,]
 ```
 
 ```{r}
-StrNL_StrInv_dds <- DESeq(StrNL_StrInv_dds, parallel = TRUE)
+StrNL_StrInv_dds <- DESeq(StrNL_StrInv_dds, sfType = "poscounts", parallel = TRUE)
 ```
 
 # Pseudobulking lol TT.TT
@@ -385,7 +384,7 @@ saveRDS(EpNL_EpInv_pb_dds, "data/DESeq2/EpNL_EpInv_pb_dds.rds")
 
 ```{r}
 # Save DESeq results 
-EpNL_EpInv_pb_dds_res <- results(EpNL_EpInv_pb_dds, contrast = c("dxs", "NL", "Invasive"))
+EpNL_EpInv_pb_dds_res <- results(EpNL_EpInv_pb_dds, contrast = c("dxs", "Invasive", "NL"))
 summary(EpNL_EpInv_pb_dds_res)
 
 # Convert results to dataframe
