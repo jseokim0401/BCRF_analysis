@@ -31,11 +31,11 @@ library(ggplotify)
 
 ## Ep NL v. Ep Invasive 
 
-### Set up for GSEA
+### Set up
 ```{r}
 # Prepare data 
 # Load in data 
-EpNL_EpInv <- read.csv("../data/DESeq2/EpNL_EpInv_res.csv", row.names = 1)
+EpNL_EpInv <- read.csv("data/DESeq2/EpNL_EpInv_res.csv", row.names = 1)
 ```
 
 ```{r}
@@ -241,19 +241,19 @@ EpNL_EpInv_gsea_HM_readable <- clusterProfiler::setReadable(
 # Clean up pathway titles for readability 
 EpNL_EpInv_gsea_HM_readable@result <- EpNL_EpInv_gsea_HM_readable@result |>
   mutate(
-    Pathway = Description |>
+    Description = Description |>
       str_replace_all("HALLMARK_", " ") |> # Delete HALLMARK_
       str_replace_all("_", " ") |>         # Delete underscores in pathway titles
       str_to_title(),                      # Make pathways title case instead of caps
-      .keep = "unused",                    # Delete old Description column
-      .before = 1                          # Put new Pathway column at front
+      keep= ".unused",                    # Delete original column 
+      .before = 1                          # Put new Description column at front
   )
 
-saveRDS(EpNL_EpInv_gsea_HM_readable, "../data/GSEA/EpNL_EpInv_gsea_res_HM.rds")
+saveRDS(EpNL_EpInv_gsea_HM_readable, "data/GSEA/EpNL_EpInv_gsea_res_HM.rds")
 
 # Convert gseaResult object into dataframe
 EpNL_EpInv_gsea_res_HM_df <- as.data.frame(EpNL_EpInv_gsea_HM_readable)
-write_csv(EpNL_EpInv_gsea_res_HM_df, "../data/GSEA/EpNL_EpInv_gsea_res_HM.csv")
+write_csv(EpNL_EpInv_gsea_res_HM_df, "data/GSEA/EpNL_EpInv_gsea_res_HM.csv")
 ```
 
 ### Visualization (HM) 
@@ -264,7 +264,7 @@ EpNL_EpInv_dotplot_HM <- dotplot(EpNL_EpInv_gsea_res_HM, showCategory = 15) +
   ggtitle("Top 15 GO Terms from GSEA\nin Ep NL v. Ep Inv") +
   theme(axis.text.y = element_text(size = 9, family = "Arial"))
 
-ggsave("EpNL_EpInv_dotplot_HM.png", EpNL_EpInv_dotplot_BP, path = "../plots/GSEA",
+ggsave("EpNL_EpInv_dotplot_HM.png", EpNL_EpInv_dotplot_BP, path = "plots/GSEA",
        width = 6, height = 7, dpi = 300)
 ```
 
@@ -285,13 +285,13 @@ EpNL_EpInv_top10_updown_HM <- bind_rows(EpNL_EpInv_top10_up_HM, EpNL_EpInv_top10
 
 # Generate barplot
 EpNL_EpInv_barplot_HM <- EpNL_EpInv_top10_updown_HM |>
-  ggplot(aes(x = NES, y = reorder(Pathway, NES), fill = p.adjust)) + 
+  ggplot(aes(x = NES, y = reorder(Description, NES), fill = p.adjust)) + 
   geom_col() + 
   scale_fill_gradient(low = "red", high = "blue") +
   labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Top 10 Upregulated and Downregulated \nPathways in Ep Inv Over Ep NL") +
   theme_bw() 
   
-ggsave("EpNL_EpInv_barplot_HM.png", EpNL_EpInv_barplot_HM, path = "../plots/GSEA",
+ggsave("EpNL_EpInv_barplot_HM.png", EpNL_EpInv_barplot_HM, path = "plots/GSEA",
        width = 9, height = 6, dpi = 300)
 ```
 
@@ -303,7 +303,7 @@ EpNL_EpInv_cnetplot_HM <- enrichplot::cnetplot(
   showCategory = 5
   ) 
 
-ggsave("EpNL_EpInv_cnetplot_HM.png", EpNL_EpInv_cnetplot_HM, path = "../plots/GSEA",
+ggsave("EpNL_EpInv_cnetplot_HM.png", EpNL_EpInv_cnetplot_HM, path = "plots/GSEA",
        width = 12, height = 8, dpi = 300)
 ```
 
@@ -328,15 +328,9 @@ EpNL_EpInv_gsea_top10_HM@result <- bind_rows(top_up_HM, top_down_HM)
 EpNL_EpInv_gene_sets_HM <- geneInCategory(EpNL_EpInv_gsea_top10_HM)
 
 # Add arrows to pathway names
-names(EpNL_EpInv_gene_sets_BP) <- c(
-  paste0("↑ ", top_up_BP$Description),
-  paste0("↓ ", top_down_BP$Description)
-)
-
-# Add arrows to pathway names
 names(EpNL_EpInv_gene_sets_HM) <- c(
-  paste0("↑ ", top_up_HM$Pathway),
-  paste0("↓ ", top_down_HM$Pathway)
+  paste0("↑ ", top_up_HM$Description),
+  paste0("↓ ", top_down_HM$Description)
 )
 
 # Wrap names for cleanness
@@ -357,7 +351,187 @@ EpNL_EpInv_upset_HM <- upset(
 
 ggsave("EpNL_EpInv_upset_HM.png",
        plot = as.ggplot(EpNL_EpInv_upset_HM),
-       path = "../plots/GSEA",
+       path = "plots/GSEA",
+       width = 8,
+       height = 10,
+       dpi = 300)
+```
+
+## Str NL v. Str Invasive 
+
+### Set up 
+
+```{r}
+# Prepare data 
+# Load in data 
+StrNL_StrInv <- read.csv("data/DESeq2/StrNL_StrInv_res.csv", row.names = 1)
+```
+
+```{r}
+# Prepare ranked list of genes
+# Use signed p value as ranking: sign(df$log2fc)*(-log10(df$pval))) to account for genes w/ large FC but are non-significant
+StrNL_StrInv_rankings <- sign(StrNL_StrInv$log2FoldChange)*(-log10(StrNL_StrInv$pvalue))
+names(StrNL_StrInv_rankings) <- StrNL_StrInv$Gene # genes as names
+
+# Sort by decreasing signed p values 
+StrNL_StrInv_rankings <- sort(StrNL_StrInv_rankings, decreasing = TRUE)
+
+# Convert from SYMBOL to Entrez nomenclature 
+StrNL_StrInv_genes_mapped <- bitr(
+  names(StrNL_StrInv_rankings),
+  fromType = "SYMBOL", 
+  toType = c("ENTREZID"),
+  OrgDb = org.Hs.eg.db)
+
+nrow(StrNL_StrInv_genes_mapped) # Check how many genes were mapped successfully
+length(StrNL_StrInv_rankings)   # 20440 v. 27360
+```
+
+```{r}
+# Create named vector w/ Entrez IDs as names and corresponding signed p values 
+StrNL_StrInv_rankings_mapped <- StrNL_StrInv_rankings[StrNL_StrInv_genes_mapped$SYMBOL]
+names(StrNL_StrInv_rankings_mapped) <- StrNL_StrInv_genes_mapped$ENTREZID
+
+# Check all genes mapped correctly
+length(StrNL_StrInv_rankings_mapped) == nrow(StrNL_StrInv_genes_mapped)
+head(StrNL_StrInv_rankings)
+head(StrNL_StrInv_rankings_mapped)
+```
+
+### Running GSEA (HM) 
+
+We'll use the Hallmark gene set from Molecular Signatures Database (MSigDB) for our PEA.
+
+```{r}
+# Hallmark gene set from msigdbr_collections()
+hallmark_sets <- msigdbr(species = 'Homo sapiens', collection = 'H')
+
+# Convert to named list format required by clusterprofiler: the first column should have pathway names
+# the second column should have genes in Entrez ID format 
+hallmark_sets <- hallmark_sets |>
+  dplyr::select(gs_name, ncbi_gene)
+```
+
+```{r}
+# Run GSEA
+StrNL_StrInv_gsea_res_HM <- clusterProfiler::GSEA(
+  geneList = StrNL_StrInv_rankings_mapped, 
+  TERM2GENE = hallmark_sets, 
+  minGSSize = 15, 
+  maxGSSize = 500, 
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  nPermSimple = 10000, # Increase this value as need
+  scoreType = "std"
+)
+
+# Convert Entrez IDs to gene symbols for readability
+StrNL_StrInv_gsea_HM_readable <- clusterProfiler::setReadable(
+  StrNL_StrInv_gsea_res_HM,
+  OrgDb = org.Hs.eg.db,
+  keyType = "ENTREZID"
+  )
+
+# Clean up pathway titles for readability 
+StrNL_StrInv_gsea_HM_readable@result <- StrNL_StrInv_gsea_HM_readable@result |>
+  mutate(
+    Description = Description |>
+      str_replace_all("HALLMARK_", " ") |> # Delete HALLMARK_
+      str_replace_all("_", " ") |>         # Delete underscores in pathway titles
+      str_to_title(),                      # Make pathways title case instead of caps
+      .before = 1                          # Put new Description column at front
+  )
+
+saveRDS(StrNL_StrInv_gsea_HM_readable, "data/GSEA/StrNL_StrInv_gsea_res_HM.rds")
+
+# Convert gseaResult object into dataframe
+StrNL_StrInv_gsea_res_HM_df <- as.data.frame(StrNL_StrInv_gsea_HM_readable)
+write_csv(StrNL_StrInv_gsea_res_HM_df, "data/GSEA/StrNL_StrInv_gsea_res_HM.csv")
+```
+
+### Visualization (HM)
+
+```{r}
+# Dotplot
+StrNL_StrInv_dotplot_HM <- dotplot(StrNL_StrInv_gsea_res_HM, showCategory = 15) +
+  ggtitle("Top 15 GO Terms from GSEA\nin Str NL v. Str Inv") +
+  theme(axis.text.y = element_text(size = 9, family = "Arial"))
+
+ggsave("StrNL_StrInv_dotplot_HM.png", StrNL_StrInv_dotplot_HM, path = "plots/GSEA",
+       width = 6, height = 7, dpi = 300)
+```
+
+```{r}
+# Barplot
+# Didn't do additional filtering because the GSEA only returned 20 pathways
+StrNL_StrInv_barplot_HM <- StrNL_StrInv_gsea_res_HM_df |>
+  ggplot(aes(x = NES, y = reorder(Description, NES), fill = p.adjust)) + 
+  geom_col() + 
+  scale_fill_gradient(low = "red", high = "blue") +
+  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Upregulated and Downregulated Pathways \nin Str Inv Over Str NL") +
+  theme_bw() 
+  
+ggsave("StrNL_StrInv_barplot_HM.png", StrNL_StrInv_barplot_HM, path = "plots/GSEA",
+       width = 9, height = 6, dpi = 300)
+```
+
+```{r}
+# Cnetplot
+StrNL_StrInv_cnetplot_HM <- enrichplot::cnetplot(
+  StrNL_StrInv_gsea_HM_readable,
+  categorySizeBy = ~NES, # or "pvalue", "p.adjust"
+  showCategory = 5
+  ) 
+
+ggsave("StrNL_StrInv_cnetplot_HM.png", StrNL_StrInv_cnetplot_HM, path = "plots/GSEA",
+       width = 12, height = 8, dpi = 300)
+```
+
+```{r}
+# Upsetplot
+StrNL_StrInv_gsea_top10_HM <- StrNL_StrInv_gsea_HM_readable
+
+# Top 5 positively enriched
+StrNL_StrInv_top_up_HM <- StrNL_StrInv_gsea_HM_readable@result |>
+  arrange(desc(NES)) |>
+  slice_head(n = 5)
+
+# Top 5 negatively enriched
+StrNL_StrInv_top_down_HM <- StrNL_StrInv_gsea_HM_readable@result |>
+  arrange(NES) |>
+  slice_head(n = 5)
+
+# Combine
+StrNL_StrInv_gsea_top10_HM@result <- bind_rows(StrNL_StrInv_top_up_HM, StrNL_StrInv_top_down_HM)
+
+# Create gene sets for UpSetR input 
+StrNL_StrInv_gene_sets_HM <- geneInCategory(StrNL_StrInv_gsea_top10_HM)
+
+# Add arrows to pathway names
+names(StrNL_StrInv_gene_sets_HM) <- c(
+  paste0("↑ ", StrNL_StrInv_top_up_HM$Description),
+  paste0("↓ ", StrNL_StrInv_top_down_HM$Description)
+)
+
+# Wrap names for cleanness
+names(StrNL_StrInv_gene_sets_HM) <- stringr::str_wrap(names(StrNL_StrInv_gene_sets_HM), width = 40)
+
+# Generate upsetplot
+StrNL_StrInv_upset_HM <- upset(
+  fromList(StrNL_StrInv_gene_sets_HM),
+  nsets = 10,                              # Plot top 5 up and down pathways
+  nintersects = 15,                        # Number of intersections to plot
+  mainbar.y.label = "Gene intersections",
+  sets.x.label = "Leading-edge genes",
+  text.scale = 1.3,
+  shade.color = "#D981AA",
+  matrix.color = "#C43B7B",
+  order.by = "freq", 
+  )
+
+ggsave("StrNL_StrInv_upset_HM.png",
+       plot = as.ggplot(StrNL_StrInv_upset_HM),
+       path = "plots/GSEA",
        width = 8,
        height = 10,
        dpi = 300)

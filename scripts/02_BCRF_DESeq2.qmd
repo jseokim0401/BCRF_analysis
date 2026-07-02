@@ -20,7 +20,7 @@ The goal of this script will be to run DESeq2 for several comparisons in the BCR
 library(Seurat)
 library(DESeq2)
 library(BiocParallel)
-register(SnowParam(5))
+register(SnowParam(7))
 library(tidyverse)
 library(EnhancedVolcano)
 
@@ -29,7 +29,7 @@ options(Seurat.object.assay.version = "v5")
 
 ```{r}
 # Import data
-BCRF <- readRDS("../data/integrated_BCRF_set_1-10_&_EN.rds")
+BCRF <- readRDS("data/integrated_BCRF_set_1-10_&_EN.rds")
 ```
 
 ```{r}
@@ -219,6 +219,29 @@ StrNL_StrInv_coldata <- data.frame(
 ```
 
 ```{r}
+# Find all samples that have zero nonzero counts
+# How many nonzero genes does each cell have, after filtering?
+nonzero_per_cell <- colSums(StrNL_StrInv_counts > 0)
+summary(nonzero_per_cell) # Min. = 1 
+
+# Any cells with zero or near-zero nonzero genes?
+sum(nonzero_per_cell == 0)  # 1 
+which(nonzero_per_cell < 5) # BCRF1_3&EN_11886_364_NL_S_S2_R1_001, 9
+```
+
+```{r}
+# Filter out samples that have zero counts for all genes
+# Defined in troubleshooting section 
+StrNL_StrInv_coldata <- StrNL_StrInv_coldata[nonzero_per_cell > 0, ]
+StrNL_StrInv_counts <- StrNL_StrInv_counts[, nonzero_per_cell > 0]
+
+# double check
+dim(StrNL_StrInv_counts)
+dim(StrNL_StrInv_coldata)
+identical(colnames(StrNL_StrInv_counts), rownames(StrNL_StrInv_coldata)) # TRUE
+```
+
+```{r}
 # Create DESeqDataSet from subset counts and group information 
 StrNL_StrInv_dds <- DESeqDataSetFromMatrix(
   countData = StrNL_StrInv_counts,
@@ -234,8 +257,98 @@ StrNL_StrInv_dds <- StrNL_StrInv_dds[StrNL_StrInv_dds_keep,]
 ```
 
 ```{r}
-StrNL_StrInv_dds <- DESeq(StrNL_StrInv_dds, sfType = "poscounts", parallel = TRUE)
+saveRDS(StrNL_StrInv_dds, "data/DESeq2/StrNL_StrInv_dds.rds")
 ```
+
+```{r}
+StrNL_StrInv_dds <- readRDS("data/DESeq2/StrNL_StrInv_dds.rds")
+```
+
+```{r}
+# Run DESeq
+StrNL_StrInv_dds <- DESeq(StrNL_StrInv_dds, parallel = TRUE)
+```
+
+```{r}
+# Save DESeq results 
+StrNL_StrInv_dds_res <- results(StrNL_StrInv_dds, contrast = c("dxs", "Invasive", "NL"))
+summary(StrNL_StrInv_dds_res)
+saveRDS(StrNL_StrInv_dds_res, "data/DESeq2/StrNL_StrInv_res.rds")
+
+# Convert results to dataframe
+StrNL_StrInv_dds_df <- StrNL_StrInv_dds_res |>
+  as.data.frame() |>
+  rownames_to_column(var = "Gene") # Make column for gene ids 
+
+# Save results 
+write.csv(StrNL_StrInv_dds_df, "data/DESeq2/StrNL_StrInv_res.csv")
+```
+
+### Troubleshooting
+
+Trying to run DESeq returns: 
+Error in estimateSizeFactorsForMatrix(counts(object), locfunc = locfunc,  : 
+  every gene contains at least one zero, cannot compute log geometric means
+
+Trying to run with argument: sfType = "poscounts" returns: 
+Error in .local(object, ..., value) : all(!is.na(value)) is not TRUE
+
+```{r}
+# Check if there are any NAs in counts data 
+StrNL_StrInv_counts_df <- as.data.frame(StrNL_StrInv_counts)
+anyNA(StrNL_StrInv_counts) # FALSE 
+```
+
+```{r}
+# Check for NAs in colData
+sum(is.na(StrNL_StrInv_coldata$patient)) # 0 
+sum(is.na(StrNL_StrInv_coldata$dxs))     # 0 
+table(StrNL_StrInv_coldata$patient, StrNL_StrInv_coldata$dxs, useNA = "ifany")
+# No NAs 
+```
+
+There were no immediate red flags, so I wanted to create a histogram of raw counts to see the distribution of counts per gene before deciding on filtering parameters.  
+
+```{r}
+StrNL_StrInv_counts_long <- StrNL_StrInv_counts_df |>
+  rownames_to_column("gene") |>
+  pivot_longer(-gene, names_to = "sample", values_to = "count")
+```
+
+```{r}
+StrNL_StrInv_counts_histogram <- StrNL_StrInv_counts_long |>
+  ggplot(aes(x = count, fill = sample)) +
+  geom_histogram(bins = 50) +
+  scale_x_log10() +
+  theme(legend.position = "none") +
+  labs(x = "Raw count (log10 scale)", y = "Number of gene-sample entries",
+       title = "Distribution of raw counts")
+
+StrNL_StrInv_counts_histogram
+```
+
+```{r}
+StrNL_StrInv_counts_toplot <- StrNL_StrInv_counts_df |>
+  mutate(
+    total_counts = rowSums(across(everything())),
+    .before = 1
+  ) |>
+  filter(total_counts == 0)
+```
+
+```{r}
+StrNL_StrInv_dds_counts <- counts(StrNL_StrInv_dds)
+
+# How many nonzero genes does each cell have, after filtering?
+nonzero_per_cell <- colSums(StrNL_StrInv_dds_counts > 0)
+summary(nonzero_per_cell) # Min. = 1 
+
+# Any cells with zero or near-zero nonzero genes?
+sum(nonzero_per_cell == 0)  # 1 
+which(nonzero_per_cell < 5) # BCRF1_3&EN_11886_364_NL_S_S2_R1_001, 9
+```
+
+I have diagnosed the sample that has zero counts for all genes. 
 
 # Pseudobulking lol TT.TT
 
@@ -374,14 +487,10 @@ EpNL_EpInv_pb_dds <- DESeq(EpNL_EpInv_pb_dds, parallel = TRUE)
 ```
 
 ```{r}
-# Save DESeq dds 
-saveRDS(EpNL_EpInv_pb_dds, "data/DESeq2/EpNL_EpInv_pb_dds.rds")
-```
-
-```{r}
 # Save DESeq results 
 EpNL_EpInv_pb_dds_res <- results(EpNL_EpInv_pb_dds, contrast = c("dxs", "Invasive", "NL"))
 summary(EpNL_EpInv_pb_dds_res)
+saveRDS(EpNL_EpInv_pb_dds_res, "data/DESeq2/EpNL_EpInv_pb_dds_res.rds")
 
 # Convert results to dataframe
 EpNL_EpInv_pb_dds_res_df <- EpNL_EpInv_pb_dds_res |>
@@ -421,3 +530,95 @@ EpNL_EpInv_pb_VP <- EnhancedVolcano(EpNL_EpInv_pb_res,
 # Save plots as .png
 ggsave("EpNL_EpInv_pb_VP.png", EpNL_EpInv_pb_VP, path = "plots/DESeq2")
 ```
+
+## Str NL v. Str Invasive 
+
+```{r}
+# Subset BCRF data to omit dxs that are not "NL" or "Invasive" 
+NL_Inv_subsetted_BCRF <- subset(
+  joined_BCRF,
+  subset = dxs %in% c("NL", "Invasive")
+  )
+
+# Subset BCRF data to select only "Str" tissue samples 
+StrNL_StrInv_subsetted_BCRF <- subset(
+  NL_Inv_subsetted_BCRF, 
+  subset = tissue %in% "Str"
+)
+```
+
+```{r}
+# Extract counts matrix from BCRF data 
+# Pseudobulk to sum gene counts for all cells from same sample (patient) for each condiition (dxs)
+StrNL_StrInv_pb_counts <- AggregateExpression(
+  StrNL_StrInv_subsetted_BCRF, 
+  assays = "RNA", 
+  group.by = c("patient", "dxs") # From meta.data 
+)
+
+StrNL_StrInv_pb_counts <- StrNL_StrInv_pb_counts$RNA
+```
+
+```{r}
+# Build colData 
+# Select samples data from pseudobulk, will be identified by patient, tissue type i.e. g683_Str
+StrNL_StrInv_selected_samples <- colnames(StrNL_StrInv_pb_counts)
+
+# Parse patient + tissue into separate columns
+StrNL_StrInv_pb_counts_parsed <- do.call(rbind, strsplit(StrNL_StrInv_selected_samples, "_"))
+colnames(StrNL_StrInv_pb_counts_parsed) <- c("patient", "dxs")
+
+# Remove g prefix from patient 
+StrNL_StrInv_pb_counts_parsed[, "patient"] <- sub("^g", "", StrNL_StrInv_pb_counts_parsed[, "patient"])
+```
+
+```{r}
+# Build colData
+StrNL_StrInv_pb_coldata <- data.frame(
+  patient = factor(StrNL_StrInv_pb_counts_parsed[, "patient"]), # Treat patient as categorical variable
+  dxs = factor(StrNL_StrInv_pb_counts_parsed[, "dxs"], levels = c("NL", "Invasive")),
+  row.names = StrNL_StrInv_selected_samples
+)
+```
+
+```{r}
+# Create DESeqDataSet from subset counts and group information 
+StrNL_StrInv_pb_dds <- DESeqDataSetFromMatrix(
+  countData = StrNL_StrInv_pb_counts,
+  colData = StrNL_StrInv_pb_coldata, 
+  design = ~ patient + dxs
+)
+```
+
+```{r}
+# Keep genes with at least 1 count in at least 10 cells
+StrNL_StrInv_pb_dds_keep <- rowSums(counts(StrNL_StrInv_pb_dds) >= 1) >= 10
+StrNL_StrInv_pb_dds <- StrNL_StrInv_pb_dds[StrNL_StrInv_pb_dds_keep,]
+```
+
+```{r}
+# Run DESeq
+StrNL_StrInv_pb_dds <- DESeq(StrNL_StrInv_pb_dds, sfType = "poscounts", parallel = TRUE)
+```
+
+```{r}
+# Save DESeq dds 
+saveRDS(StrNL_StrInv_pb_dds, "data/DESeq2/StrNL_StrInv_pb_dds.rds")
+```
+
+```{r}
+# Save DESeq results 
+StrNL_StrInv_pb_dds_res <- results(StrNL_StrInv_pb_dds, contrast = c("dxs", "Invasive", "NL"))
+summary(StrNL_StrInv_pb_dds_res)
+
+# Convert results to dataframe
+StrNL_StrInv_pb_dds_res_df <- StrNL_StrInv_pb_dds_res |>
+  as.data.frame() |>
+  rownames_to_column(var = "Gene") # Make column for gene ids 
+
+# Save results 
+write.csv(StrNL_StrInv_pb_dds_res_df, "data/DESeq2/StrNL_StrInv_pb_res.csv")
+```
+
+### Troubleshooting
+
