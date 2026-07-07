@@ -58,6 +58,27 @@ Ep_Str_coldata <- data.frame(
 ```
 
 ```{r}
+# Find all samples that have zero nonzero counts
+Ep_Str_nonzero_per_cell <- colSums(Ep_Str_counts > 0)
+summary(Ep_Str_nonzero_per_cell) # Min. = 0 
+
+# Any cells with zero or near-zero nonzero genes?
+sum(Ep_Str_nonzero_per_cell == 0)  # 1 
+which(Ep_Str_nonzero_per_cell < 5) # BCRF1_3&EN_11886_364_NL_S_S2_R1_001, 107
+```
+
+```{r}
+# Filter out samples that have zero counts for all genes
+Ep_Str_coldata <- Ep_Str_coldata[Ep_Str_nonzero_per_cell > 0, ]
+Ep_Str_counts <- Ep_Str_counts[, Ep_Str_nonzero_per_cell > 0]
+
+# double check
+dim(Ep_Str_counts)
+dim(Ep_Str_coldata)
+identical(colnames(Ep_Str_counts), rownames(Ep_Str_coldata)) # TRUE
+```
+
+```{r}
 # Create DESeqDataSet from subset counts and group information 
 Ep_Str_dds <- DESeqDataSetFromMatrix(
   countData = Ep_Str_counts,
@@ -74,19 +95,6 @@ Ep_Str_dds <- Ep_Str_dds[Ep_Str_dds_keep,]
 
 ```{r}
 Ep_Str_dds <- DESeq(Ep_Str_dds, sfType = "poscounts", parallel = TRUE)
-```
-
-```{r}
-# Troubleshooting
-
-# Check which samples have NA size factors
-sf <- sizeFactors(Ep_Str_dds)
-sum(is.na(Ep_Str_dds))
-which(is.na(Ep_Str_dds))
-
-# Look at total counts per sample
-colSums(counts(Ep_Str_dds))[is.na(sf)]
-
 ```
 
 ## Ep NL v. Ep Invasive 
@@ -131,6 +139,11 @@ EpNL_EpInv_dds <- EpNL_EpInv_dds[EpNL_EpInv_dds_keep,]
 ```
 
 ```{r}
+saveRDS(EpNL_EpInv_dds, "data/DESeq2/EpNL_EpInv_dds_torun.rds")
+EpNL_EpInv_dds <- readRDS("data/DESeq2/EpNL_EpInv_dds_torun.rds")
+```
+
+```{r}
 # Run DEseq
 EpNL_EpInv_dds <- DESeq(EpNL_EpInv_dds, parallel = TRUE)
 ```
@@ -150,38 +163,31 @@ EpNL_EpInv_dds_df <- EpNL_EpInv_dds_res |>
 write.csv(EpNL_EpInv_dds_df, "data/DESeq2/EpNL_EpInv_res.csv")
 ```
 
-### Downstream Analyses & Volcano Plot 
-
-```{r}
-#| eval: FALSE 
-# Filter for significant results (adjusted p-value < 0.05)
-EpNL_EpInv_sig_res <- EpNL_EpInv_dds_res[which(EpNL_EpInv_dds_res$padj < 0.05), ]
-
-# Convert to dataframe
-EpNL_EpInv_sig_res_df <- as.data.frame(EpNL_EpInv_sig_res)
-```
+### Volcano Plot 
 
 ```{r}
 EpNL_EpInv_res <- read.csv("data/DESeq2/EpNL_EpInv_res.csv")
-EpNL_EpInv_pb_res <- read.csv("data/DESeq2/EpNL_EpInv_pb_res.csv")
 ```
 
 ```{r}
-# Comparing non-pseudobulk and pseudobulk pipelines; looks pretty similar on initial glance 
-head(EpNL_EpInv_res)
-head(EpNL_EpInv_pb_res)
-```
+keyGenes <- c("ESR1", "ERBB2", "MYC", "TP53", "PIK3CA", "CCND1")
 
-```{r}
 EpNL_EpInv_VP <- EnhancedVolcano(EpNL_EpInv_res,
   x = "log2FoldChange", # fold change statistic to plot
   y = "pvalue", # significance values
   lab = EpNL_EpInv_res$Gene, # labels for points
   pCutoff = 1e-05, # The p value cutoff we will use (default)
   FCcutoff = 1, # The fold change cutoff (default)
-  title = "Genes differentially expressed in Ep Invasive relative to Ep NL", # add title
-  caption = NULL,
-  labSize = 1.5 # smaller labels
+  title = "Genes differentially expressed in Ep Invasive relative to Ep NL",
+  selectLab = keyGenes,         # Label only key genes
+  labSize = 3.0, 
+  labCol = "black",
+  labFace = "bold",
+  boxedLabels = TRUE,           # boxes make labels stand out from the cloud
+  drawConnectors = TRUE,        # connector lines from point to label
+  widthConnectors = 0.5,
+  colConnectors = 'black',
+  arrowheads = FALSE 
 ) +
   # change the overall theme
   theme_classic() +
@@ -221,19 +227,19 @@ StrNL_StrInv_coldata <- data.frame(
 ```{r}
 # Find all samples that have zero nonzero counts
 # How many nonzero genes does each cell have, after filtering?
-nonzero_per_cell <- colSums(StrNL_StrInv_counts > 0)
-summary(nonzero_per_cell) # Min. = 1 
+StrNL_StrInv_nonzero_per_cell <- colSums(StrNL_StrInv_counts > 0)
+summary(StrNL_StrInv_nonzero_per_cell) # Min. = 1 
 
 # Any cells with zero or near-zero nonzero genes?
-sum(nonzero_per_cell == 0)  # 1 
-which(nonzero_per_cell < 5) # BCRF1_3&EN_11886_364_NL_S_S2_R1_001, 9
+sum(StrNL_StrInv_nonzero_per_cell == 0)  # 1 
+which(StrNL_StrInv_nonzero_per_cell < 5) # BCRF1_3&EN_11886_364_NL_S_S2_R1_001, 9
 ```
 
 ```{r}
 # Filter out samples that have zero counts for all genes
 # Defined in troubleshooting section 
-StrNL_StrInv_coldata <- StrNL_StrInv_coldata[nonzero_per_cell > 0, ]
-StrNL_StrInv_counts <- StrNL_StrInv_counts[, nonzero_per_cell > 0]
+StrNL_StrInv_coldata <- StrNL_StrInv_coldata[StrNL_StrInv_nonzero_per_cell > 0, ]
+StrNL_StrInv_counts <- StrNL_StrInv_counts[, StrNL_StrInv_nonzero_per_cell > 0]
 
 # double check
 dim(StrNL_StrInv_counts)
@@ -257,11 +263,9 @@ StrNL_StrInv_dds <- StrNL_StrInv_dds[StrNL_StrInv_dds_keep,]
 ```
 
 ```{r}
-saveRDS(StrNL_StrInv_dds, "data/DESeq2/StrNL_StrInv_dds.rds")
-```
-
-```{r}
-StrNL_StrInv_dds <- readRDS("data/DESeq2/StrNL_StrInv_dds.rds")
+# Save DESeqDataSet object so environment can be cleared 
+saveRDS(StrNL_StrInv_dds, "data/DESeq2/StrNL_StrInv_dds_torun.rds")
+StrNL_StrInv_dds <- readRDS("data/DESeq2/StrNL_StrInv_dds_torun.rds")
 ```
 
 ```{r}
@@ -284,9 +288,48 @@ StrNL_StrInv_dds_df <- StrNL_StrInv_dds_res |>
 write.csv(StrNL_StrInv_dds_df, "data/DESeq2/StrNL_StrInv_res.csv")
 ```
 
-### Troubleshooting
+### Volcano Plot 
+```{r}
+# Load in results data 
+StrNL_StrInv_res <- read.csv("data/DESeq2/StrNL_StrInv_res.csv")
+```
 
-Trying to run DESeq returns: 
+```{r}
+# Generate volcano plot 
+keyGenes <- c("ESR1", "ERBB2", "MYC", "TP53", "PIK3CA", "CCND1")
+
+# Any expression may be dissection artifacts? 
+
+StrNL_StrInv_VP <- EnhancedVolcano(StrNL_StrInv_res,
+  x = "log2FoldChange",                 
+  y = "padj",                
+  lab = StrNL_StrInv_res$Gene, 
+  pCutoff = 1e-05, 
+  FCcutoff = 1,
+  title = "Genes differentially expressed in Str Invasive relative to Str NL",
+  selectLab = keyGenes,         # Label only key genes
+  labSize = 3.0, 
+  labCol = "black",
+  labFace = "bold",
+  boxedLabels = TRUE,           # boxes make labels stand out from the cloud
+  drawConnectors = TRUE,        # connector lines from point to label
+  widthConnectors = 0.5,
+  colConnectors = 'black',
+  arrowheads = FALSE 
+) +
+  # change the overall theme
+  theme_classic() +
+  # move the legend to the bottom
+  theme(legend.position = "bottom")
+
+# Save plots as .png
+ggsave("StrNL_StrInv_VP.png", StrNL_StrInv_VP, path = "plots/DESeq2",
+       width = 7, height = 7, dpi = 300)
+```
+
+## Troubleshooting
+
+Trying to run DESeq on Ep v. Str and Str NL v. StrI Inv returns: 
 Error in estimateSizeFactorsForMatrix(counts(object), locfunc = locfunc,  : 
   every gene contains at least one zero, cannot compute log geometric means
 
