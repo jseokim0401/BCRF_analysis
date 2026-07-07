@@ -103,12 +103,13 @@ write_csv(EpNL_EpInv_gsea_res_BP_df, "data/GSEA/EpNL_EpInv_gsea_res_BP.csv")
 ```{r}
 # Load results 
 EpNL_EpInv_gsea_res_BP <- readRDS("data/GSEA/EpNL_EpInv_gsea_res_BP.rds")
+EpNL_EpInv_gsea_res_BP_df <- read.csv("data/GSEA/EpNL_EpInv_gsea_res_BP.csv")
 ```
 
 ```{r}
 # Dotplot
 EpNL_EpInv_dotplot_BP <- dotplot(EpNL_EpInv_gsea_res_BP, showCategory = 15) +
-  ggtitle("Top 15 GO Terms from GSEA\nin Ep NL v. Ep Inv") +
+  ggtitle("Top 15 GO:BP Terms from GSEA\nin Ep NL v. Ep Inv") +
   theme(axis.text.y = element_text(size = 9, family = "Arial"))
 
 ggsave("EpNL_EpInv_dotplot_BP.png", EpNL_EpInv_dotplot_BP, path = "plots/GSEA",
@@ -119,12 +120,16 @@ ggsave("EpNL_EpInv_dotplot_BP.png", EpNL_EpInv_dotplot_BP, path = "plots/GSEA",
 # Barplot
 # Select the top 10 upregulated pathways according to NES 
 EpNL_EpInv_top10_up_BP <- EpNL_EpInv_gsea_res_BP_df |> 
+  filter(p.adjust < 0.05) |>
   arrange(desc(NES)) |>
+  filter(NES > 0) |>
   slice_head(n = 10)
 
 # Select the top 10 downregulated pathways according to NES 
 EpNL_EpInv_top10_down_BP <- EpNL_EpInv_gsea_res_BP_df |>
+  filter(p.adjust < 0.05) |>
   arrange(NES) |>
+  filter(NES < 0) |>
   slice_head(n = 10)
 
 # Combine dfs 
@@ -135,7 +140,7 @@ EpNL_EpInv_barplot_BP <- EpNL_EpInv_top10_updown_BP |>
   ggplot(aes(x = NES, y = reorder(Description, NES), fill = p.adjust)) + 
   geom_col() + 
   scale_fill_gradient(low = "red", high = "blue") +
-  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Top 10 Upregulated and Downregulated \nPathways in Ep Inv Over Ep NL") +
+  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Top-Ranked GO:BP Terms by NES\nin Ep Inv Over Ep NL") +
   theme_bw() 
   
 ggsave("EpNL_EpInv_barplot_BP.png", EpNL_EpInv_barplot_BP, path = "plots/GSEA",
@@ -263,9 +268,15 @@ write_csv(EpNL_EpInv_gsea_res_HM_df, "data/GSEA/EpNL_EpInv_gsea_res_HM.csv")
 ### Visualization (HM) 
 
 ```{r}
+# Load results 
+EpNL_EpInv_gsea_res_HM <- readRDS("data/GSEA/EpNL_EpInv_gsea_res_HM.rds")
+EpNL_EpInv_gsea_res_HM_df <- read.csv("data/GSEA/EpNL_EpInv_gsea_res_HM.csv")
+```
+
+```{r}
 # Dotplot
 EpNL_EpInv_dotplot_HM <- dotplot(EpNL_EpInv_gsea_res_HM, showCategory = 15) +
-  ggtitle("Top 15 GO Terms from GSEA\nin Ep NL v. Ep Inv (HM)") +
+  ggtitle("Top 15 Hallmark Pathways from GSEA\nin Ep NL v. Ep Inv") +
   theme(axis.text.y = element_text(size = 9, family = "Arial"))
 
 ggsave("EpNL_EpInv_dotplot_HM.png", EpNL_EpInv_dotplot_HM, path = "plots/GSEA",
@@ -275,13 +286,17 @@ ggsave("EpNL_EpInv_dotplot_HM.png", EpNL_EpInv_dotplot_HM, path = "plots/GSEA",
 ```{r}
 # Barplot
 # Select the top 10 upregulated pathways according to NES 
-EpNL_EpInv_top10_up_HM <- EpNL_EpInv_gsea_res_HM_df |> 
+EpNL_EpInv_top10_up_HM <- EpNL_EpInv_gsea_res_HM_df |>
+  filter(p.adjust < 0.1) |>  # Filter for significant pathways 
   arrange(desc(NES)) |>
+  filter(NES > 0) |>
   slice_head(n = 10)
 
 # Select the top 10 downregulated pathways according to NES 
 EpNL_EpInv_top10_down_HM <- EpNL_EpInv_gsea_res_HM_df |>
+  filter(p.adjust < 0.1) |>
   arrange(NES) |>
+  filter(NES < 0) |>
   slice_head(n = 10)
 
 # Combine dfs 
@@ -292,7 +307,7 @@ EpNL_EpInv_barplot_HM <- EpNL_EpInv_top10_updown_HM |>
   ggplot(aes(x = NES, y = reorder(Description, NES), fill = p.adjust)) + 
   geom_col() + 
   scale_fill_gradient(low = "red", high = "blue") +
-  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Top 10 Upregulated and Downregulated \nPathways in Ep Inv Over Ep NL (HM)") +
+  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Top-Ranked Hallmark Pathways by NES\nin Ep Inv Over Ep NL") +
   theme_bw() 
   
 ggsave("EpNL_EpInv_barplot_HM.png", EpNL_EpInv_barplot_HM, path = "plots/GSEA",
@@ -443,7 +458,7 @@ StrNL_StrInv_gsea_res_BP_df <- read.csv("data/GSEA/StrNL_StrInv_gsea_res_BP.csv"
 ```{r}
 # Dotplot
 StrNL_StrInv_dotplot_BP <- dotplot(StrNL_StrInv_gsea_res_BP, showCategory = 15) +
-  ggtitle("Top 15 GO Terms from GSEA\nin Str NL v. Str Inv (BP)") +
+  ggtitle("Top-Ranked GO:BP Terms from GSEA\nin Str NL v. Str Inv (BP)") +
   theme(axis.text.y = element_text(size = 9, family = "Arial"))
 
 ggsave("StrNL_StrInv_dotplot_BP.png", StrNL_StrInv_dotplot_BP, path = "plots/GSEA",
@@ -453,12 +468,14 @@ ggsave("StrNL_StrInv_dotplot_BP.png", StrNL_StrInv_dotplot_BP, path = "plots/GSE
 ```{r}
 # Barplot
 # Select the top 10 upregulated pathways according to NES 
-StrNL_StrInv_top10_up_BP <- StrNL_StrInv_gsea_res_BP_df |> 
+StrNL_StrInv_top10_up_BP <- StrNL_StrInv_gsea_res_BP_df |>
+  filter(p.adjust < 0.05) |>
   arrange(desc(NES)) |>
   slice_head(n = 10)
 
 # Select the top 10 downregulated pathways according to NES 
 StrNL_StrInv_top10_down_BP <- StrNL_StrInv_gsea_res_BP_df |>
+  filter(p.adjust < 0.05) |>
   arrange(NES) |>
   slice_head(n = 10)
 
@@ -470,7 +487,7 @@ StrNL_StrInv_barplot_BP <- StrNL_StrInv_top10_updown_BP |>
   ggplot(aes(x = NES, y = reorder(Description, NES), fill = p.adjust)) + 
   geom_col() + 
   scale_fill_gradient(low = "red", high = "blue") +
-  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Top 10 Upregulated and Downregulated \nPathways in Str Inv Over Str NL (BP)") +
+  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Top-Ranked GO:BP Terms by NES \nin Str Inv Over Str NL") +
   theme_bw() 
   
 ggsave("StrNL_StrInv_barplot_BP.png", StrNL_StrInv_barplot_BP, path = "plots/GSEA",
@@ -606,7 +623,7 @@ StrNL_StrInv_gsea_res_HM_df <- read.csv("data/GSEA/StrNL_StrInv_gsea_res_HM.csv"
 ```{r}
 # Dotplot
 StrNL_StrInv_dotplot_HM <- dotplot(StrNL_StrInv_gsea_res_HM, showCategory = 15) +
-  ggtitle("Top 15 GO Terms from GSEA\nin Str NL v. Str Inv (HM)") +
+  ggtitle("Top 15 Hallmark Pathways from GSEA\nin Str NL v. Str Inv") +
   theme(axis.text.y = element_text(size = 9, family = "Arial"))
 
 ggsave("StrNL_StrInv_dotplot_HM.png", StrNL_StrInv_dotplot_HM, path = "plots/GSEA",
@@ -615,12 +632,13 @@ ggsave("StrNL_StrInv_dotplot_HM.png", StrNL_StrInv_dotplot_HM, path = "plots/GSE
 
 ```{r}
 # Barplot
-# Didn't do additional filtering because the GSEA only returned 20 pathways
+# Didn't do additional filtering of top upregulated/downregulated pathways because the GSEA only returned 20 pathways
 StrNL_StrInv_barplot_HM <- StrNL_StrInv_gsea_res_HM_df |>
+  filter(p.adjust < 0.1) |>
   ggplot(aes(x = NES, y = reorder(Description, NES), fill = p.adjust)) + 
   geom_col() + 
   scale_fill_gradient(low = "red", high = "blue") +
-  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Upregulated and Downregulated Pathways \nin Str Inv Over Str NL (HM)") +
+  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Top-Ranked Hallmark Pathways by NES\nin Str Inv Over Str NL") +
   theme_bw() 
   
 ggsave("StrNL_StrInv_barplot_HM.png", StrNL_StrInv_barplot_HM, path = "plots/GSEA",
