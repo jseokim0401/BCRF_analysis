@@ -250,7 +250,6 @@ EpNL_EpInv_gsea_HM_readable@result <- EpNL_EpInv_gsea_HM_readable@result |>
       str_replace_all("HALLMARK_", " ") |> # Delete HALLMARK_
       str_replace_all("_", " ") |>         # Delete underscores in pathway titles
       str_to_title(),                      # Make pathways title case instead of caps
-      keep= ".unused",                    # Delete original column 
       .before = 1                          # Put new Description column at front
   )
 
@@ -266,10 +265,10 @@ write_csv(EpNL_EpInv_gsea_res_HM_df, "data/GSEA/EpNL_EpInv_gsea_res_HM.csv")
 ```{r}
 # Dotplot
 EpNL_EpInv_dotplot_HM <- dotplot(EpNL_EpInv_gsea_res_HM, showCategory = 15) +
-  ggtitle("Top 15 GO Terms from GSEA\nin Ep NL v. Ep Inv") +
+  ggtitle("Top 15 GO Terms from GSEA\nin Ep NL v. Ep Inv (HM)") +
   theme(axis.text.y = element_text(size = 9, family = "Arial"))
 
-ggsave("EpNL_EpInv_dotplot_HM.png", EpNL_EpInv_dotplot_BP, path = "plots/GSEA",
+ggsave("EpNL_EpInv_dotplot_HM.png", EpNL_EpInv_dotplot_HM, path = "plots/GSEA",
        width = 6, height = 7, dpi = 300)
 ```
 
@@ -293,7 +292,7 @@ EpNL_EpInv_barplot_HM <- EpNL_EpInv_top10_updown_HM |>
   ggplot(aes(x = NES, y = reorder(Description, NES), fill = p.adjust)) + 
   geom_col() + 
   scale_fill_gradient(low = "red", high = "blue") +
-  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Top 10 Upregulated and Downregulated \nPathways in Ep Inv Over Ep NL") +
+  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Top 10 Upregulated and Downregulated \nPathways in Ep Inv Over Ep NL (HM)") +
   theme_bw() 
   
 ggsave("EpNL_EpInv_barplot_HM.png", EpNL_EpInv_barplot_HM, path = "plots/GSEA",
@@ -436,9 +435,15 @@ write_csv(StrNL_StrInv_gsea_res_BP_df, "data/GSEA/StrNL_StrInv_gsea_res_BP.csv")
 ### Visualization (BP)
 
 ```{r}
+# Load results 
+StrNL_StrInv_gsea_res_BP <- readRDS("data/GSEA/StrNL_StrInv_gsea_res_BP.rds")
+StrNL_StrInv_gsea_res_BP_df <- read.csv("data/GSEA/StrNL_StrInv_gsea_res_BP.csv")
+```
+
+```{r}
 # Dotplot
 StrNL_StrInv_dotplot_BP <- dotplot(StrNL_StrInv_gsea_res_BP, showCategory = 15) +
-  ggtitle("Top 15 GO Terms from GSEA\nin Str NL v. Str Inv") +
+  ggtitle("Top 15 GO Terms from GSEA\nin Str NL v. Str Inv (BP)") +
   theme(axis.text.y = element_text(size = 9, family = "Arial"))
 
 ggsave("StrNL_StrInv_dotplot_BP.png", StrNL_StrInv_dotplot_BP, path = "plots/GSEA",
@@ -465,7 +470,7 @@ StrNL_StrInv_barplot_BP <- StrNL_StrInv_top10_updown_BP |>
   ggplot(aes(x = NES, y = reorder(Description, NES), fill = p.adjust)) + 
   geom_col() + 
   scale_fill_gradient(low = "red", high = "blue") +
-  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Top 10 Upregulated and Downregulated \nPathways in Str Inv Over Str NL") +
+  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Top 10 Upregulated and Downregulated \nPathways in Str Inv Over Str NL (BP)") +
   theme_bw() 
   
 ggsave("StrNL_StrInv_barplot_BP.png", StrNL_StrInv_barplot_BP, path = "plots/GSEA",
@@ -593,9 +598,15 @@ write_csv(StrNL_StrInv_gsea_res_HM_df, "data/GSEA/StrNL_StrInv_gsea_res_HM.csv")
 ### Visualization (HM)
 
 ```{r}
+# Load results 
+StrNL_StrInv_gsea_res_HM <- readRDS("data/GSEA/StrNL_StrInv_gsea_res_HM.rds")
+StrNL_StrInv_gsea_res_HM_df <- read.csv("data/GSEA/StrNL_StrInv_gsea_res_HM.csv")
+```
+
+```{r}
 # Dotplot
 StrNL_StrInv_dotplot_HM <- dotplot(StrNL_StrInv_gsea_res_HM, showCategory = 15) +
-  ggtitle("Top 15 GO Terms from GSEA\nin Str NL v. Str Inv") +
+  ggtitle("Top 15 GO Terms from GSEA\nin Str NL v. Str Inv (HM)") +
   theme(axis.text.y = element_text(size = 9, family = "Arial"))
 
 ggsave("StrNL_StrInv_dotplot_HM.png", StrNL_StrInv_dotplot_HM, path = "plots/GSEA",
@@ -609,7 +620,7 @@ StrNL_StrInv_barplot_HM <- StrNL_StrInv_gsea_res_HM_df |>
   ggplot(aes(x = NES, y = reorder(Description, NES), fill = p.adjust)) + 
   geom_col() + 
   scale_fill_gradient(low = "red", high = "blue") +
-  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Upregulated and Downregulated Pathways \nin Str Inv Over Str NL") +
+  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Upregulated and Downregulated Pathways \nin Str Inv Over Str NL (HM)") +
   theme_bw() 
   
 ggsave("StrNL_StrInv_barplot_HM.png", StrNL_StrInv_barplot_HM, path = "plots/GSEA",
