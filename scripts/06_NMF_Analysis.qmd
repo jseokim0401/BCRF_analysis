@@ -1,0 +1,321 @@
+---
+title: "06_NMF_Analysis"
+format: gfm
+---
+
+# 06_NMF_Analysis
+
+The goal of this script is to generate visualizations i.e. consensus maps, silhouette plots, etc to determine the optimal number of clusters for the newly Ep- and Str-subsetted BCRF datasets.
+
+Also, functions for 
+
+## Set-up 
+
+Perform silhouette analysis, saves gene, and sample associations into CSV.
+
+```{r}
+library(NMF)
+library(argparse)
+library(viridis)
+library(fgsea)
+library(tidyr)
+library(rms)
+
+# Load-in data 
+load("data/NMF/Ep/Ep_res.RData")
+load("data/NMF/Str/Str_res.RData")
+```
+
+## Visualizations
+
+After NMF, assess clustering quality through visualizations: rank survey, consensus maps, and silhouette plots. 
+The comprehensive consensus map with all k ranks on one .jpeg results in a graphics error, but individually generating is fine. 
+
+### Ep 
+
+```{r}
+# Rank survey plot
+# This visually represents how well the NMF model has performed across different ranks
+png(file = "plots/NMF/Ep/BCRF_Ep_NMF_rank_survey_res200.png", width = 1724, height = 1052, res = 200)
+plot(Ep_res) 
+dev.off()
+
+# same here, we evaluate how robust are the clusters
+# Via consensusmap, which are produced for various ranks to assess robustness of the clusters 
+# jpeg(file = "data/NMF_practice/BCRF_Ep_NMF_consensus_3-15.jpg",width = 6800, height = 4202)
+# consensusmap(res)
+# dev.off()
+
+# k=4
+png(file = "plots/NMF/Ep/BCRF_Ep_NMF_consensus_k4.png",width = 3000, height = 2000)
+consensusmap(Ep_res$consensus$`4`)
+dev.off()
+# k=5
+png(file = "plots/NMF/Ep/BCRF_Ep_NMF_consensus_k5.png",width = 3000, height = 2000)
+consensusmap(Ep_res$consensus$`5`)
+dev.off()
+# k=6
+png(file = "plots/NMF/Ep/BCRF_Ep_NMF_consensus_k6.png",width = 3000, height = 2000)
+consensusmap(Ep_res$consensus$`6`)
+dev.off()
+# k=7
+png(file = "plots/NMF/Ep/BCRF_Ep_NMF_consensus_k7.png",width = 3000, height = 2000)
+consensusmap(Ep_res$consensus$`7`)
+dev.off()
+# k=8
+png(file = "plots/NMF/Ep/BCRF_Ep_NMF_consensus_k8.png",width = 3000, height = 2000)
+consensusmap(Ep_res$consensus$`8`)
+dev.off()
+# k=9
+png(file = "plots/NMF/Ep/BCRF_Ep_NMF_consensus_k9.png",width = 3000, height = 2000)
+consensusmap(Ep_res$consensus$`9`)
+dev.off()
+# k=10
+png(file = "plots/NMF/Ep/BCRF_Ep_NMF_consensus_k10.png",width = 3000, height = 2000)
+consensusmap(Ep_res$consensus$`10`)
+dev.off()
+
+# silhouette plot (avoid solutions with negative values), to visualize clustering quality across ranks. 
+# This evaluates separation distances between clusters, with negative values indicating poor clustering.
+png(file="plots/NMF/Ep/BCRF_Ep_NMF_silhouette_hires.png", width = 10000, height = 7500)
+par(mfrow=c(3,4))
+plot(silhouette(Ep_res$fit$`4`))
+plot(silhouette(Ep_res$fit$`5`))
+plot(silhouette(Ep_res$fit$`6`))
+plot(silhouette(Ep_res$fit$`7`))
+plot(silhouette(Ep_res$fit$`8`))
+plot(silhouette(Ep_res$fit$`9`))
+plot(silhouette(Ep_res$fit$`10`))
+dev.off()
+
+# Add res = 300 argument to silhouette plot if text difficult to read
+png(file="plots/NMF/Ep/BCRF_Ep_NMF_silhouette_hires_res300.png", width = 10000, height = 7500, res = 300)
+par(mfrow=c(3,4))
+plot(silhouette(Ep_res$fit$`4`))
+plot(silhouette(Ep_res$fit$`5`))
+plot(silhouette(Ep_res$fit$`6`))
+plot(silhouette(Ep_res$fit$`7`))
+plot(silhouette(Ep_res$fit$`8`))
+plot(silhouette(Ep_res$fit$`9`))
+plot(silhouette(Ep_res$fit$`10`))
+dev.off()
+
+# graphics.off()
+```
+
+### Str
+
+```{r}
+# A plot of the NMF results (plot(res)) is generated and saved as JPEG.
+# This visually represents how well the NMF model has performed across different ranks
+
+png(file = "plots/NMF/Str/BCRF_Str_NMF_rank_survey_res200.png", width = 1724, height = 1052, res = 200)
+plot(Str_res) 
+dev.off()
+
+# same here, we evaluate how robust are the clusters
+# Via consensusmap, which are produced for various ranks to assess robustness of the clusters 
+# jpeg(file = "data/NMF_practice/BCRF_Ep_NMF_consensus_3-15.jpg",width = 6800, height = 4202)
+# consensusmap(res)
+# dev.off()
+
+# k=4
+png(file = "plots/NMF/Str/BCRF_Str_NMF_consensus_k4.png",width = 3000, height = 2000)
+consensusmap(Str_res$consensus$`4`)
+dev.off()
+# k=5
+png(file = "plots/NMF/Str/BCRF_Str_NMF_consensus_k5.png",width = 3000, height = 2000)
+consensusmap(Str_res$consensus$`5`)
+dev.off()
+# k=6
+png(file = "plots/NMF/Str/BCRF_Str_NMF_consensus_k6.png",width = 3000, height = 2000)
+consensusmap(Str_res$consensus$`6`)
+dev.off()
+# k=7
+png(file = "plots/NMF/Str/BCRF_Str_NMF_consensus_k7.png",width = 3000, height = 2000)
+consensusmap(Str_res$consensus$`7`)
+dev.off()
+# k=8
+png(file = "plots/NMF/Str/BCRF_Str_NMF_consensus_k8.png",width = 3000, height = 2000)
+consensusmap(Str_res$consensus$`8`)
+dev.off()
+# k=9
+png(file = "plots/NMF/Str/BCRF_Str_NMF_consensus_k9.png",width = 3000, height = 2000)
+consensusmap(Str_res$consensus$`9`)
+dev.off()
+# k=10
+png(file = "plots/NMF/Str/BCRF_Str_NMF_consensus_k10.png",width = 3000, height = 2000)
+consensusmap(Str_res$consensus$`10`)
+dev.off()
+
+
+# silohuette plot (avoid solutions with negative values), to visualize clustering quality across ranks. 
+# This evaluates separation distances between clusters, with negative values indicating poor clustering.
+png(file="plots/NMF/Str/BCRF_Str_NMF_silhouette_hires.png", width = 10000, height = 7500)
+par(mfrow=c(3,4))
+plot(silhouette(Str_res$fit$`4`))
+plot(silhouette(Str_res$fit$`5`))
+plot(silhouette(Str_res$fit$`6`))
+plot(silhouette(Str_res$fit$`7`))
+plot(silhouette(Str_res$fit$`8`))
+plot(silhouette(Str_res$fit$`9`))
+plot(silhouette(Str_res$fit$`10`))
+dev.off()
+
+png(file="plots/NMF/Str/BCRF_Str_NMF_silhouette_hires_res300.png", width = 10000, height = 7500, res = 300)
+par(mfrow=c(3,4))
+plot(silhouette(Str_res$fit$`4`))
+plot(silhouette(Str_res$fit$`5`))
+plot(silhouette(Str_res$fit$`6`))
+plot(silhouette(Str_res$fit$`7`))
+plot(silhouette(Str_res$fit$`8`))
+plot(silhouette(Str_res$fit$`9`))
+plot(silhouette(Str_res$fit$`10`))
+dev.off()
+
+# graphics.off()
+```
+
+## Extract genes list(s) 
+
+The purpose of these functions is to extract the genes associated w/ each cluster for the different rank k values. 
+The first function extracts genes for a specified rank while the second function compiles gene cluster information for every rank into a single CSV.
+
+```{r}
+# Takes NMF fit object for a specified rank and extracts genes associated w/ each cluster
+# Extracts the basis matrix (gene-cluster associations), identifies the cluster with the highest weight for each gene, saves results to CSV, returns df for inspection.
+extract_genes_per_cluster <- function(nmf_fit, output_file) {
+
+  # Extract the basis matrix
+  # This is the matrix obtained from the NMF fit, where each row = gene, and each column = cluster.
+
+  basis_matrix <- basis(nmf_fit)
+  
+  # Find the cluster with the maximum weight for each gene
+  # gene_clusters will be a vector where each entry = cluster w the highest association for each gene
+  gene_clusters <- apply(basis_matrix, 1, which.max)
+  
+  # Create a data frame with gene names and their corresponding clusters
+  gene_cluster_df <- data.frame(
+    Gene = rownames(basis_matrix),
+    Cluster = gene_clusters
+  )
+  
+  # Save the df to CSV
+  write.csv(gene_cluster_df, file = output_file, row.names = FALSE, quote = FALSE)
+  
+  # Return the df for inspection
+  return(gene_cluster_df)
+}
+
+# Example for rank 8
+gene_cluster_mapping <- extract_genes_per_cluster(Ep_res$fit$`8`, "data/NMF/Ep/NMF_genes_per_cluster_rank8.csv")
+print(head(gene_cluster_mapping))
+```
+
+```{r}
+# Extracts gene weights and their associated clusters for ranks (ie 4-10), saves all ranks’ data into single CSV
+extract_genes_all_ranks <- function(nmf_result, ranks) {
+  
+  # Loop through each rank and extract information
+  all_ranks_data <- data.frame()
+  for (rank in ranks) {
+    cat("Processing rank:", rank, "\n")
+    
+    # Extract the basis matrix for the current rank
+    nmf_fit <- nmf_result$fit[[as.character(rank)]]
+    basis_matrix <- basis(nmf_fit)
+    
+    # Find the cluster with the maximum weight for each gene
+    max_weights <- apply(basis_matrix, 1, max)
+    gene_clusters <- apply(basis_matrix, 1, which.max)
+    
+    # Create a data frame for the current rank
+    rank_data <- data.frame(
+      Gene = rownames(basis_matrix),
+      Cluster = gene_clusters,
+      Max_Weight = max_weights,
+      Rank = rank
+    )
+    
+    # Combine with all ranks data
+    all_ranks_data <- rbind(all_ranks_data, rank_data)
+  }
+  
+  return(all_ranks_data)
+}
+```
+
+### Ep
+```{r}
+# Specify ranks and output directory
+ranks <- 4:10
+
+# Extract and save data for all ranks
+Ep_all_ranks_data <- extract_genes_all_ranks(Ep_res, 4:10)
+write.csv(Ep_all_ranks_data, "data/NMF/Ep/Ep_all_ranks_data.csv")
+print(head(all_ranks_data))
+```
+
+### Str
+```{r}
+Str_all_ranks_data <- extract_genes_all_ranks(Str_res, 4:10)
+write.csv(Str_all_ranks_data, "data/NMF/Str/Str_all_ranks_data.csv")
+print(head(Str_all_ranks_data))
+```
+
+## Extract sample list 
+
+The purpose of this function is to list which clusters best define each sample.  
+
+```{r}
+# Function to extract samples and clusters for all ranks
+# Extracts the sample-to-cluster associations for the specified ranks
+extract_samples_all_ranks <- function(nmf_result, ranks) {
+  
+  # Loop through each rank and extract sample-cluster associations
+  all_ranks_sample_data <- data.frame()
+  for (rank in ranks) {
+    cat("Processing rank:", rank, "\n")
+    
+    # Extract the coefficient matrix for the current rank
+    nmf_fit <- nmf_result$fit[[as.character(rank)]]
+    coef_matrix <- coef(nmf_fit)
+    
+    # Find the cluster with the maximum coefficient for each sample
+    sample_clusters <- apply(coef_matrix, 2, which.max)
+    
+    # Create a data frame for the current rank
+    rank_sample_data <- data.frame(
+      Sample = colnames(coef_matrix),
+      Cluster = sample_clusters,
+      Max_Coefficient = apply(coef_matrix, 2, max),
+      Rank = rank
+    )
+    
+    # Combine with all ranks data
+    all_ranks_sample_data <- rbind(all_ranks_sample_data, rank_sample_data)
+  }
+  
+  return(all_ranks_sample_data)
+}
+```
+
+### Ep
+```{r}
+# Specify ranks and output directory
+ranks <- 4:10
+
+# Extract and save data for all ranks
+Ep_all_ranks_sample_data <- extract_samples_all_ranks(Ep_res, ranks)
+print(head(Ep_all_ranks_sample_data))
+write.csv(Ep_all_ranks_sample_data, "data/NMF/Ep/Ep_all_ranks_sample_data.csv")
+```
+
+### Str
+```{r}
+Str_all_ranks_sample_data <- extract_samples_all_ranks(Str_res, ranks)
+print(head(Str_all_ranks_sample_data))
+write.csv(Str_all_ranks_sample_data, "data/NMF/Str/Str_all_ranks_sample_data.csv")
+```
+
