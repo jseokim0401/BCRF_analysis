@@ -1,0 +1,241 @@
+---
+title: "05_NMF"
+format: html
+---
+
+# 05_NMF
+
+The goal of this script will be to run non-negative matrix factorization (NMF) on the compartamentally subsetted (epithelial and stromal) integrated BCRF datasets. NMF is a linear dimensionality reduction technique. In the context of RNA-seq analysis, NMF calculates embeddings that separate data into interpretable groups. The embeddings can be stored into the reductions slot of a Seurat object and used in downstream analyses. 
+
+General workflow: DESeq2 normalized counts > VST > NMF
+
+## Set-up
+
+```{r}
+library(Seurat)
+library(DESeq2)
+library(BiocParallel)
+BiocParallel::register(SnowParam(7))
+library(NMF)
+set.seed(67)
+
+# Load in data
+BCRF_Ep <- readRDS("data/integrated_BCRF_set_1-10_&_EN_v2_Ep.rds")
+BCRF_Str <- readRDS("data/integrated_BCRF_set_1-10_&_EN_v2_Str.rds")
+```
+
+## NMF of Ep-Subsetted BCRF
+
+### Normalization via DESeq2 
+
+```{r}
+# Get counts data
+Ep_counts <- GetAssayData(BCRF_Ep, assay = "RNA", layer = "counts")
+
+# Get metadata
+Ep_metadata <- BCRF_Ep@meta.data
+
+# Check dimensions are the same b/t counts & metadata
+dim(Ep_counts)
+dim(Ep_metadata)
+identical(colnames(Ep_counts), rownames(Ep_metadata)) # TRUE
+
+# Create DESeqDataSet from subset counts and group information 
+Ep_dds <- DESeqDataSetFromMatrix(
+  countData = Ep_counts,
+  colData = Ep_metadata,
+  design = ~ 1 # This design parameter means "no design", for normalization only
+  )
+
+# Keep genes with at least 1 counts in at least 10 samples 
+Ep_keep <- rowSums(counts(Ep_dds) >= 1) >= 10
+Ep_dds <- Ep_dds[Ep_keep,]
+
+# Run DESeq normalization 
+Ep_dds <- DESeq(Ep_dds, parallel=TRUE)
+
+# Applies VST to read counts, useful for downstream clustering or PCA
+Ep_vsd <- varianceStabilizingTransformation(Ep_dds)
+
+# Saves transformed data
+write.csv(round(assay(Ep_vsd), 2), file = "data/NMF/Ep/BCRF_Ep_VST.csv")
+
+# Check VST Results: Visualize w PCA or clustering to ensure that VST results capture the expected variance.
+```
+
+### Load-in & Transform VSD Data 
+```{r}
+# Load in VST results for downstream NMF
+Ep_rna_matrix_3 <- read.csv("data/NMF/Ep/BCRF_Ep_VST.csv", row.names = 1)
+
+# RNA matrix is transposed and scaled. Centering is set to FALSE, which means the data are normalized by their respective variances but not mean-centered.
+Ep_edata <- t(scale(t(Ep_rna_matrix_3),center = FALSE))
+```
+
+### Get Variance for Genes & Filter for Top Variance Genes 
+
+```{r}
+# Variance is computed for each gene (row) across samples (columns).
+# Genes with variance greater than the filter value (0; non-negative) are retained for analysis.
+# This step removes genes that do not vary across samples.
+# var.data contains the variance values for all genes
+
+Ep_var.data <- apply(Ep_edata, 1, var)
+vfilter <- 0
+# Retain genes with variance greater than the filter value
+Ep_vdata <- Ep_edata[which(Ep_var.data > vfilter ),]
+
+# Count the number of genes that passed the filter (rows in vdata)
+Ep_num_genes_above_filter <- nrow(Ep_vdata) 
+# Print dimensions and the count of genes
+dim(Ep_vdata) # 37207 522
+print(Ep_num_genes_above_filter) # 37k+ is a lot
+
+# Generate histogram to see at what number of genes where variance becomes high  
+hist(Ep_var.data)
+
+# Generate ranked variance plot to see where to cut off genes 
+plot(sort(Ep_var.data, decreasing = TRUE), type = "l",
+     xlab = "Gene rank",
+     ylab = "Variance")
+
+# Keep top 3000 genes 
+head(sort(Ep_var.data, decreasing = TRUE))
+Ep_top.genes <- names(sort(Ep_var.data, decreasing = TRUE))[1:3000]
+Ep_vdata <- Ep_edata[Ep_top.genes, ]
+
+saveRDS(Ep_vdata, "data/NMF/Ep/Ep_vdata.rds")
+```
+
+### Run NMF 
+
+The range of k (4:10) was chosen based on the fact there are 7 unique conditions as defined by "dxs" in the Ep-subsetted BCRF dataset. 
+
+```{r}
+# Load in gene variance matrix 
+Ep_vdata <- readRDS("../data/NMF/Ep/Ep_vdata")
+
+# run NMF from 4 to 10 factors, 30 times (takes time and memory) and catch errors
+# NMF is applied to filtered data vdata, testing 4-10 factors or clusters
+# nrun specifies that each NMF run should be repeated n times for robustness
+Ep_res <- nmf(Ep_vdata, 4:10, nrun=30, .opt="vp15", seed = 67)
+
+# Save results and continue with further analysis
+save(Ep_res, file = "data/NMF/Ep/Ep_res.RData")
+
+# after NMF results, determine optimal number of factors using silhouette score or cophenetic correlation
+```
+
+## NMF of Str-Subsetted BCRF 
+
+### Normalization via DESeq2
+
+```{r}
+# Get counts data
+Str_counts <- GetAssayData(BCRF_Str, assay = "RNA", layer = "counts")
+
+# Get metadata
+Str_metadata <- BCRF_Str@meta.data
+
+# Find all samples that have zero nonzero counts
+# How many nonzero genes does each cell have, after filtering?
+nonzero_per_cell <- colSums(Str_counts > 0)
+summary(nonzero_per_cell) # Min. = 0
+
+# Any cells with zero or near-zero nonzero genes?
+sum(nonzero_per_cell == 0)  # 1 
+which(nonzero_per_cell < 5) # set1_3_11886_364_NL_S_S2_R1_001 50 
+
+# Filter out samples that have zero counts for all genes
+# Defined in troubleshooting section 
+Str_metadata <- Str_metadata[nonzero_per_cell > 0, ]
+Str_counts <- Str_counts[, nonzero_per_cell > 0]
+
+# Check dimensions are the same b/t counts & metadata
+dim(Str_counts)
+dim(Str_metadata)
+identical(colnames(Str_counts), rownames(Str_metadata)) # TRUE
+
+# Create DESeqDataSet from subset counts and group information 
+Str_dds <- DESeqDataSetFromMatrix(
+  countData = Str_counts,
+  colData = Str_metadata,
+  design = ~ 1 # This design parameter means "no design", for normalization only
+  )
+
+# Keep genes with at least 1 counts in at least 10 samples 
+Str_keep <- rowSums(counts(Str_dds) >= 1) >= 10
+Str_dds <- Str_dds[Str_keep,]
+
+# Run DESeq normalization 
+Str_dds <- DESeq(Str_dds, parallel=TRUE)
+
+# Applies VST to read counts, useful for downstream clustering or PCA
+Str_vsd <- varianceStabilizingTransformation(Str_dds)
+
+# Saves transformed data
+write.csv(round(assay(Str_vsd), 2), file = "data/NMF/Str/BCRF_Str_VST.csv")
+
+# Check VST Results: Visualize w PCA or clustering to ensure that VST results capture the expected variance.
+```
+
+### Load-in & Transform VSD Data 
+```{r}
+# Load in VST results for downstream NMF
+Str_rna_matrix_3 <- read.csv("data/NMF/Ep/BCRF_Str_VST.csv", row.names = 1)
+
+# RNA matrix is transposed and scaled. Centering is set to FALSE, which means the data are normalized by their respective variances but not mean-centered.
+Str_edata <- t(scale(t(Str_rna_matrix_3),center = FALSE))
+```
+
+### Get Variance for Genes & Filter for Top Variance Genes 
+
+```{r}
+# Variance is computed for each gene (row) across samples (columns).
+# Genes with variance greater than the filter value (0; non-negative) are retained for analysis.
+# This step removes genes that do not vary across samples.
+# var.data contains the variance values for all genes
+
+Str_var.data <- apply(Str_edata, 1, var)
+vfilter <- 0
+# Retain genes with variance greater than the filter value
+Str_vdata <- Str_edata[which(Str_var.data > vfilter ),]
+
+# Count the number of genes that passed the filter (rows in vdata)
+Str_num_genes_above_filter <- nrow(Str_vdata) 
+# Print dimensions and the count of genes
+dim(Str_vdata) # 37207 522
+print(Str_num_genes_above_filter) # 37k+ is a lot
+
+# Generate histogram to see at what number of genes where variance becomes high  
+hist(Str_var.data)
+
+# Generate ranked variance plot to see where to cut off genes 
+plot(sort(Str_var.data, decreasing = TRUE), type = "l",
+     xlab = "Gene rank",
+     ylab = "Variance")
+
+# Keep top 3000 genes 
+head(sort(Str_var.data, decreasing = TRUE))
+Str_top.genes <- names(sort(Str_var.data, decreasing = TRUE))[1:3000]
+Str_vdata <- Str_edata[Str_top.genes, ]
+
+saveRDS(Str_vdata, "data/NMF/Str/Str_vdata.rds")
+```
+
+### Run NMF 
+
+The range of k (4:10) was chosen based on the fact there are 7 unique conditions as defined by "dxs" in the Ep-subsetted BCRF dataset. 
+
+```{r}
+# Load in gene variance matrix 
+Str_vdata <- readRDS("../data/NMF/Str/Str_vdata")
+
+# Run NMF 
+Str_res <- nmf(Str_vdata, 4:10, nrun=30, .opt="vp15", seed = 67)
+
+# Save results and continue with further analysis
+save(Str_res, file = "data/NMF/Str/Str_res.RData")
+
+# after NMF results, determine optimal number of factors using silhouette score or cophenetic correlation
+```
