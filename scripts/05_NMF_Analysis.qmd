@@ -1,9 +1,9 @@
 ---
-title: "06_NMF_Analysis"
+title: "05_NMF_Analysis"
 format: gfm
 ---
 
-# 06_NMF_Analysis
+# 05_NMF_Analysis
 
 The goal of this script is to generate visualizations i.e. consensus maps, silhouette plots, etc to determine the optimal number of clusters for the newly Ep- and Str-subsetted BCRF datasets.
 
@@ -24,6 +24,8 @@ library(rms)
 # Load-in data 
 load("data/NMF/Ep/Ep_res.RData")
 load("data/NMF/Str/Str_res.RData")
+load("data/NMF/Ep_corrected/Ep_res_corrected.RData")
+load("data/NMF/Str_corrected/Str_res_corrected.RData")
 ```
 
 ## Visualizations
@@ -75,6 +77,18 @@ png(file = "plots/NMF/Ep/BCRF_Ep_NMF_consensus_k10.png",width = 3000, height = 2
 consensusmap(Ep_res$consensus$`10`)
 dev.off()
 
+# All consensus maps on one image 
+png(file="plots/NMF/Ep/BCRF_Ep_NMF_consensus_all.png", width = 10000, height = 7000)
+par(mfrow=c(3,4))
+consensusmap(Ep_res$consensus$`4`)
+consensusmap(Ep_res$consensus$`5`)
+consensusmap(Ep_res$consensus$`6`)
+consensusmap(Ep_res$consensus$`7`)
+consensusmap(Ep_res$consensus$`8`)
+consensusmap(Ep_res$consensus$`9`)
+consensusmap(Ep_res$consensus$`10`)
+dev.off()
+
 # silhouette plot (avoid solutions with negative values), to visualize clustering quality across ranks. 
 # This evaluates separation distances between clusters, with negative values indicating poor clustering.
 png(file="plots/NMF/Ep/BCRF_Ep_NMF_silhouette_hires.png", width = 10000, height = 7500)
@@ -90,6 +104,90 @@ dev.off()
 
 # Add res = 300 argument to silhouette plot if text difficult to read
 png(file="plots/NMF/Ep/BCRF_Ep_NMF_silhouette_hires_res300.png", width = 10000, height = 7500, res = 300)
+par(mfrow=c(3,4))
+plot(silhouette(Ep_res$fit$`4`))
+plot(silhouette(Ep_res$fit$`5`))
+plot(silhouette(Ep_res$fit$`6`))
+plot(silhouette(Ep_res$fit$`7`))
+plot(silhouette(Ep_res$fit$`8`))
+plot(silhouette(Ep_res$fit$`9`))
+plot(silhouette(Ep_res$fit$`10`))
+dev.off()
+
+# graphics.off()
+```
+
+### Ep_corrected
+
+```{r}
+# Rank survey plot
+# This visually represents how well the NMF model has performed across different ranks
+png(file = "plots/NMF/Ep_corrected/BCRF_Ep_NMF_rank_survey_res200_corrected.png", width = 1724, height = 1052, res = 200)
+plot(Ep_res) 
+dev.off()
+
+# same here, we evaluate how robust are the clusters
+# Via consensusmap, which are produced for various ranks to assess robustness of the clusters 
+# jpeg(file = "data/NMF_practice/BCRF_Ep_NMF_consensus_3-15.jpg",width = 6800, height = 4202)
+# consensusmap(res)
+# dev.off()
+
+# k=4
+png(file = "plots/NMF/Ep_corrected/BCRF_Ep_NMF_consensus_k4.png",width = 3000, height = 2000)
+consensusmap(Ep_res$consensus$`4`)
+dev.off()
+# k=5
+png(file = "plots/NMF/Ep_corrected/BCRF_Ep_NMF_consensus_k5.png",width = 3000, height = 2000)
+consensusmap(Ep_res$consensus$`5`)
+dev.off()
+# k=6
+png(file = "plots/NMF/Ep_corrected/BCRF_Ep_NMF_consensus_k6.png",width = 3000, height = 2000)
+consensusmap(Ep_res$consensus$`6`)
+dev.off()
+# k=7
+png(file = "plots/NMF/Ep_corrected/BCRF_Ep_NMF_consensus_k7.png",width = 3000, height = 2000)
+consensusmap(Ep_res$consensus$`7`)
+dev.off()
+# k=8
+png(file = "plots/NMF/Ep_corrected/BCRF_Ep_NMF_consensus_k8.png",width = 3000, height = 2000)
+consensusmap(Ep_res$consensus$`8`)
+dev.off()
+# k=9
+png(file = "plots/NMF/Ep_corrected/BCRF_Ep_NMF_consensus_k9.png",width = 3000, height = 2000)
+consensusmap(Ep_res$consensus$`9`)
+dev.off()
+# k=10
+png(file = "plots/NMF/Ep_corrected/BCRF_Ep_NMF_consensus_k10.png",width = 3000, height = 2000)
+consensusmap(Ep_res$consensus$`10`)
+dev.off()
+
+# All consensus maps on one image 
+png(file="plots/NMF/Ep_corrected/BCRF_Ep_NMF_consensus_all_corrected.png", width = 10000, height = 7000)
+par(mfrow=c(3,4))
+consensusmap(Ep_res$consensus$`4`)
+consensusmap(Ep_res$consensus$`5`)
+consensusmap(Ep_res$consensus$`6`)
+consensusmap(Ep_res$consensus$`7`)
+consensusmap(Ep_res$consensus$`8`)
+consensusmap(Ep_res$consensus$`9`)
+consensusmap(Ep_res$consensus$`10`)
+dev.off()
+
+# silhouette plot (avoid solutions with negative values), to visualize clustering quality across ranks. 
+# This evaluates separation distances between clusters, with negative values indicating poor clustering.
+png(file="plots/NMF/Ep_corrected/BCRF_Ep_NMF_silhouette_hires_corrected.png", width = 10000, height = 7500)
+par(mfrow=c(3,4))
+plot(silhouette(Ep_res$fit$`4`))
+plot(silhouette(Ep_res$fit$`5`))
+plot(silhouette(Ep_res$fit$`6`))
+plot(silhouette(Ep_res$fit$`7`))
+plot(silhouette(Ep_res$fit$`8`))
+plot(silhouette(Ep_res$fit$`9`))
+plot(silhouette(Ep_res$fit$`10`))
+dev.off()
+
+# Add res = 300 argument to silhouette plot if text difficult to read
+png(file="plots/NMF/Ep_corrected/BCRF_Ep_NMF_silhouette_hires_res300_corrected.png", width = 10000, height = 7500, res = 300)
 par(mfrow=c(3,4))
 plot(silhouette(Ep_res$fit$`4`))
 plot(silhouette(Ep_res$fit$`5`))
@@ -148,6 +246,17 @@ png(file = "plots/NMF/Str/BCRF_Str_NMF_consensus_k10.png",width = 3000, height =
 consensusmap(Str_res$consensus$`10`)
 dev.off()
 
+# All consensus maps on one image 
+png(file="plots/NMF/Str/BCRF_Str_NMF_consensus_all.png", width = 10000, height = 7000)
+par(mfrow=c(3,4))
+consensusmap(Str_res$consensus$`4`)
+consensusmap(Str_res$consensus$`5`)
+consensusmap(Str_res$consensus$`6`)
+consensusmap(Str_res$consensus$`7`)
+consensusmap(Str_res$consensus$`8`)
+consensusmap(Str_res$consensus$`9`)
+consensusmap(Str_res$consensus$`10`)
+dev.off()
 
 # silohuette plot (avoid solutions with negative values), to visualize clustering quality across ranks. 
 # This evaluates separation distances between clusters, with negative values indicating poor clustering.
