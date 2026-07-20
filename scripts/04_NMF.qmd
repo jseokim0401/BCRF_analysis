@@ -1,9 +1,9 @@
 ---
-title: "05_NMF"
+title: "04_NMF"
 format: html
 ---
 
-# 05_NMF
+# 04_NMF
 
 The goal of this script will be to run non-negative matrix factorization (NMF) on the compartamentally subsetted (epithelial and stromal) integrated BCRF datasets. NMF is a linear dimensionality reduction technique. In the context of RNA-seq analysis, NMF calculates embeddings that separate data into interpretable groups. The embeddings can be stored into the reductions slot of a Seurat object and used in downstream analyses. 
 
@@ -14,10 +14,10 @@ General workflow: DESeq2 normalized counts > VST > NMF
 ```{r}
 library(Seurat)
 library(DESeq2)
+library(sva) 
 library(BiocParallel)
 BiocParallel::register(SnowParam(7))
 library(NMF)
-set.seed(67)
 
 # Load in data
 BCRF_Ep <- readRDS("data/integrated_BCRF_set_1-10_&_EN_v2_Ep.rds")
@@ -35,10 +35,20 @@ Ep_counts <- GetAssayData(BCRF_Ep, assay = "RNA", layer = "counts")
 # Get metadata
 Ep_metadata <- BCRF_Ep@meta.data
 
+# Batch-correct at the COUNT level with ComBat-seq (preserves non-negativity)
+Ep_counts_corrected <- ComBat_seq(
+  as.matrix(Ep_counts),
+  batch = Ep_metadata$protocol
+)
+
+# sanity check: should still be non-negative integers
+range(Ep_counts_corrected)
+sum(Ep_counts_corrected < 0)  # should be 0
+
 # Check dimensions are the same b/t counts & metadata
-dim(Ep_counts)
+dim(Ep_counts_corrected)
 dim(Ep_metadata)
-identical(colnames(Ep_counts), rownames(Ep_metadata)) # TRUE
+identical(colnames(Ep_counts_corrected), rownames(Ep_metadata)) # TRUE
 
 # Create DESeqDataSet from subset counts and group information 
 Ep_dds <- DESeqDataSetFromMatrix(
@@ -151,14 +161,24 @@ which(nonzero_per_cell < 5) # set1_3_11886_364_NL_S_S2_R1_001 50
 Str_metadata <- Str_metadata[nonzero_per_cell > 0, ]
 Str_counts <- Str_counts[, nonzero_per_cell > 0]
 
+# Batch-correct at the COUNT level with ComBat-seq (preserves non-negativity)
+Str_counts_corrected <- ComBat_seq(
+  as.matrix(Str_counts),
+  batch = Str_metadata$protocol
+)
+
+# sanity check: should still be non-negative integers
+range(Str_counts_corrected)
+sum(Str_counts_corrected < 0)  # should be 0
+
 # Check dimensions are the same b/t counts & metadata
-dim(Str_counts)
+dim(Str_counts_corrected)
 dim(Str_metadata)
-identical(colnames(Str_counts), rownames(Str_metadata)) # TRUE
+identical(colnames(Str_counts_corrected), rownames(Str_metadata)) # TRUE
 
 # Create DESeqDataSet from subset counts and group information 
 Str_dds <- DESeqDataSetFromMatrix(
-  countData = Str_counts,
+  countData = Str_counts_corrected,
   colData = Str_metadata,
   design = ~ 1 # This design parameter means "no design", for normalization only
   )
@@ -174,7 +194,7 @@ Str_dds <- DESeq(Str_dds, parallel=TRUE)
 Str_vsd <- varianceStabilizingTransformation(Str_dds)
 
 # Saves transformed data
-write.csv(round(assay(Str_vsd), 2), file = "data/NMF/Str/BCRF_Str_VST.csv")
+write.csv(round(assay(Str_vsd), 2), file = "../data/NMF/Str_corrected/BCRF_Str_VST_corrected.csv")
 
 # Check VST Results: Visualize w PCA or clustering to ensure that VST results capture the expected variance.
 ```
@@ -182,7 +202,7 @@ write.csv(round(assay(Str_vsd), 2), file = "data/NMF/Str/BCRF_Str_VST.csv")
 ### Load-in & Transform VSD Data 
 ```{r}
 # Load in VST results for downstream NMF
-Str_rna_matrix_3 <- read.csv("data/NMF/Ep/BCRF_Str_VST.csv", row.names = 1)
+Str_rna_matrix_3 <- read.csv("data/NMF/Str_corrected/BCRF_Str_VST_corrected.csv", row.names = 1)
 
 # RNA matrix is transposed and scaled. Centering is set to FALSE, which means the data are normalized by their respective variances but not mean-centered.
 Str_edata <- t(scale(t(Str_rna_matrix_3),center = FALSE))
@@ -220,7 +240,7 @@ head(sort(Str_var.data, decreasing = TRUE))
 Str_top.genes <- names(sort(Str_var.data, decreasing = TRUE))[1:3000]
 Str_vdata <- Str_edata[Str_top.genes, ]
 
-saveRDS(Str_vdata, "data/NMF/Str/Str_vdata.rds")
+saveRDS(Str_vdata, "data/NMF/Str_corrected/Str_vdata_corrected.rds")
 ```
 
 ### Run NMF 
@@ -229,13 +249,13 @@ The range of k (4:10) was chosen based on the fact there are 7 unique conditions
 
 ```{r}
 # Load in gene variance matrix 
-Str_vdata <- readRDS("../data/NMF/Str/Str_vdata")
+Str_vdata <- readRDS("data/NMF/Str_corrected/Str_vdata_corrected.rds")
 
 # Run NMF 
 Str_res <- nmf(Str_vdata, 4:10, nrun=30, .opt="vp15", seed = 67)
 
 # Save results and continue with further analysis
-save(Str_res, file = "data/NMF/Str/Str_res.RData")
+save(Str_res, file = "data/NMF/Str_corrected/Str_res_corrected.RData")
 
 # after NMF results, determine optimal number of factors using silhouette score or cophenetic correlation
 ```

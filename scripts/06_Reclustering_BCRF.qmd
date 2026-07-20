@@ -1,0 +1,345 @@
+---
+title: "06_Reclustering_BCRF"
+format: gfm
+---
+
+# 06_Reclustering_BCRF
+
+The goal of this script is to take the NMF results, embed them into the Seurat objects for the newly subsetted Ep and Str compartments, and re-generate  compartment-specific UMAPs. 
+
+```{r}
+# Load libraries
+library(NMF)
+library(Seurat)
+library(ggplot2)
+
+# Set global options 
+options(future.globals.maxSize = Inf)
+print(getOption("future.globals.maxSize"))
+options(Seurat.object.assay.version = "v5")
+
+# Load-in data 
+load("data/NMF/Ep/Ep_res.RData")
+load("data/NMF/Str/Str_res.RData")
+BCRF_Ep <- readRDS("data/integrated_BCRF_set_1-10_&_EN_v2_Ep.rds")
+BCRF_Str <- readRDS("data/integrated_BCRF_set_1-10_&_EN_v2_Str.rds")
+Ep_vdata <- readRDS("data/NMF/Ep/Ep_vdata.rds")    # Filtered VST matrices
+Str_vdata <- readRDS("data/NMF/Str/Str_vdata.rds")
+```
+
+## Ep
+
+### Reorient matrices correctly 
+
+NMF was run with a range of k ranks, which generates an "NMF.rank" object class. Results with individual ranks must be extracted from the "NMF.rank" class in order to embed correctly into Seurat dimensional reduction. The NMFfit class extracted in this step yields two matrices: w = genes x k and h = k x samples/cells. Seurat's DimReducObject requires embeddings as cells x factors, so, h must be transposed. 
+
+```{r}
+# Extract k=5 specific NMF result
+Ep_fit_k5 <- Ep_res$fit[["5"]]
+
+# Extract basis and coefficient matrices
+w_Ep_k5 <- basis(Ep_fit_k5)
+h_Ep_k5 <- coef(Ep_fit_k5)
+
+# Transpose coefficient matrix
+Ep_NMF_embeddings_k5 <- t(h_Ep_k5)
+```
+
+### Check that cell names line up 
+
+rownames(nmf_embeddings) needs to exactly match colnames(seurat_obj), in the same order or matchable.
+
+```{r}
+# Edit column names 
+colnames(Ep_NMF_embeddings_k5) <- paste0("NMF_", seq_len(ncol(Ep_NMF_embeddings_k5)))
+
+# Put sample names as rownames of embeddings object 
+rownames(Ep_NMF_embeddings_k5) <- colnames(Ep_vdata)  # whatever you fed into nmf()
+
+# Change "." to "-" in NMF embedding sample names 
+rownames(Ep_NMF_embeddings_k5) <- gsub("\\.", "-", rownames(Ep_NMF_embeddings_k5))
+
+# sanity check before proceeding
+all(rownames(Ep_NMF_embeddings_k5) %in% colnames(BCRF_Ep)) # TRUE
+identical(rownames(Ep_NMF_embeddings_k5), colnames(BCRF_Ep)) # TRUE 
+identical(sort(rownames(Ep_NMF_embeddings_k5)), sort(colnames(BCRF_Ep))) # TRUE 
+```
+
+### Create DimReducObject 
+
+```{r}
+BCRF_Ep[["nmf_k5"]] <- CreateDimReducObject(
+  embeddings = Ep_NMF_embeddings_k5,
+  loadings   = w_Ep_k5,                # optional but nice to keep (genes x k)
+  key        = "NMF_",                 # must end in underscore, must be unique
+  assay      = DefaultAssay(BCRF_Ep)
+)
+```
+
+### Run/Generate UMAP on NMF reduction instead of PCA
+
+```{r}
+BCRF_Ep <- RunUMAP(
+  BCRF_Ep,
+  reduction = "nmf_k5",
+  dims = 1:ncol(Ep_NMF_embeddings_k5), # or a subset of factors if some are junk
+  reduction.name = "umap_nmf_k5_",
+  reduction.key = "umapnmf_k5_"
+)
+```
+
+```{r}
+# Visualizations 
+setwd("plots/NMF_reclustering/Ep/k5")
+
+DimPlot(BCRF_Ep, reduction = "umap_nmf_k5_", label = TRUE)
+ggsave("umap.nmf.k5.png", width = 8, height = 8)
+
+BCRF_Ep$tissue[is.na(BCRF_Ep$tissue)] <- 'NA'
+DimPlot(BCRF_Ep, reduction = "umap_nmf_k5_", label = TRUE, group.by = "tissue")
+ggsave("tissue.png", width = 8, height = 8)
+
+DimPlot(BCRF_Ep, reduction = "umap_nmf_k5_", group.by = "protocol")
+ggsave("protocol.png", width = 8, height = 8)
+
+DimPlot(BCRF_Ep, reduction = "umap_nmf_k5_", group.by = "dxs")
+ggsave("dxs.png", width = 8, height = 8)  
+
+DimPlot(BCRF_Ep, reduction = "umap_nmf_k5_", group.by = "dx")
+ggsave("dx.png", width = 12, height = 8)
+
+n_patients <- length(unique(BCRF_Ep$patient))
+DimPlot(BCRF_Ep, reduction = "umap_nmf_k5_", group.by = "patient") +
+  ggtitle(paste("n patients = ", n_patients))
+ggsave("patient.png", width = 12, height = 8)  
+
+DimPlot(BCRF_Ep, reduction = "umap_nmf_k5_", group.by = "sequence.batch.number")
+ggsave("sequence batch number.png", width = 12, height = 8)
+
+# log2 of total counts (library size) per sample
+BCRF_Ep$log2counts <- log2(BCRF_Ep$nCount_RNA + 1)
+log2counts <- FeaturePlot(BCRF_Ep,
+            features = "log2counts",
+            combine = TRUE, 
+            label.size = 1) 
+print(log2counts)
+ggsave("log2counts.png", width = 8, height = 8)  
+
+
+FeaturePlot(BCRF_Ep, features = c("ESR1", "ERBB2", "MYC", "TP53", "PIK3CA"), cols = c("red", "blue"))
+ggsave("genes.png", width = 8, height = 8)
+```
+
+
+### Compare with RPCA reduction
+
+```{r}
+# Visualizations 
+setwd("plots/NMF_reclustering/Ep")
+
+DimPlot(BCRF_Ep, reduction = "umap.rpca", label = TRUE)
+ggsave("umap.rpca.png", width = 8, height = 8)
+
+obj$tissue[is.na(obj$tissue)] <- 'NA'
+DimPlot(obj, reduction = "umap.rpca", label = TRUE, group.by = "tissue")
+ggsave("tissue.png", width = 8, height = 8)
+
+DimPlot(obj, reduction = "umap.rpca", group.by = "protocol")
+ggsave("protocol.png", width = 8, height = 8)
+
+DimPlot(obj, reduction = "umap.rpca", group.by = "dxs")
+ggsave("dxs.png", width = 8, height = 8)  
+
+DimPlot(obj, reduction = "umap.rpca", group.by = "dx")
+ggsave("dx.png", width = 12, height = 8)
+
+n_patients <- length(unique(obj$patient))
+DimPlot(obj, reduction = "umap.rpca", group.by = "patient") +
+  ggtitle(paste("n patients = ", n_patients))
+ggsave("patient.png", width = 12, height = 8)  
+
+DimPlot(BCRF_Ep, reduction = "umap.rpca", group.by = "sequence.batch.number")
+ggsave("sequence batch number.png", width = 12, height = 8)
+
+# log2 of total counts (library size) per sample
+obj$log2counts <- log2(obj$nCount_RNA + 1)
+log2counts <- FeaturePlot(obj,
+            features = "log2counts",
+            combine = TRUE, 
+            label.size = 1) 
+print(log2counts)
+ggsave("log2counts.png", width = 8, height = 8)  
+
+
+FeaturePlot(obj, features = c("ESR1", "ERBB2", "MYC", "TP53", "PIK3CA"), cols = c("red", "blue"))
+ggsave("genes.png", width = 8, height = 8)
+
+saveRDS(obj, file = "/Users/eguo/Downloads/integrated_BCRF_set_1-10_&_EN.rds")
+
+```
+
+
+Combine v1 and v2 using seurat v5 rpca integration, did not do any other testing- Magda
+combine v1 and v2, need batch correction, check w pca/ clustering - Siri
+S3S v2 has more reads
+
+From TBCRCn, RAHBTn, COMETn
+
+## Set-up 
+
+```{r}
+# Load libraries
+library(future)
+library(Seurat)
+library(Matrix)
+library(ggplot2)
+```
+
+```{r}
+# Set global options 
+options(future.globals.maxSize = Inf)
+print(getOption("future.globals.maxSize"))
+options(Seurat.object.assay.version = "v5")
+```
+
+```{r}
+# Load in integrated data set (dataset used for initial EpNLv.EpStr & StrNLv.StrInv DESeq2/GSEA)
+BCRF <- readRDS("data/integrated_BCRF_set_1-10_&_EN.rds")
+
+# Join counts layers from BCRF RNA set 1-3 and BCRF RNA set 4-10
+BCRF <- JoinLayers(BCRF)
+```
+
+## Subsetting 
+
+```{r}
+# Subset BCRF data to only include "Ep" tissue type samples 
+subsetEp <- subset(
+  BCRF,
+  subset = tissue %in% "Ep"
+  )
+
+saveRDS(subsetEp, "data/subsetted_BCRF_Ep.rds")
+
+# Subset BCRF data to only include "Str" tissue type samples
+subsetStr <- subset(
+  BCRF,
+  subset = tissue %in% "Str"
+)
+
+saveRDS(subsetStr, "data/subsetted_BCRF_Str.rds")
+```
+
+## Pre-processing
+
+Pre-processing is defined by functions for normalization, highly variable genes, and scaling of the data. Normalization with NormalizeData() of integrated_BCRF_set_1-10_&_EN.rds used normalization method of LogNormalize wherein: cell counts independent of other cells, so no need to rerun in subsettted data; it would be the same. 
+
+The first step of pre-processing is to resplit the merged layers of the subsetted dataset into batch layers, so that IntegrateLayers() can correct for batch effects. The splitting in the original integrated dataset occured when merge() implicitly created layers. 
+```{r}
+# Reconstruct the original batch grouping from cell name prefixes
+BCRF$batch <- ifelse(grepl("^BCRF1_3&EN_", colnames(BCRF)), "BCRF1_3&EN", "BCRF4_10")
+
+# Sanity check — should roughly mirror the counts.1/counts.2 split sizes from the original object
+table(BCRF$batch)
+```
+
+batch effects 
+
+## Elaine's code 
+```{r}
+
+# Assign dataset labels
+# obj$dataset = sapply(Cells(obj), function(x) strsplit(x, '_')[[1]][1])
+
+# Normalize, scale from BCRF sets.R 
+obj <- NormalizeData(obj) # Adjust for seq depth, lib size to compare bw samples, includes log transform
+obj <- FindVariableFeatures(obj)
+# obj$log2counts = log2(obj$nCount_RNA + 1)
+obj <- ScaleData(obj) # Scales normalized, log-transformed counts for PCA or clustering
+obj <- RunPCA(obj, features = VariableFeatures(object = obj))
+obj <- FindNeighbors(obj, dims = 1:30, reduction = "pca")
+
+
+# Integrate layers using RPCA
+obj <- IntegrateLayers(
+  object = obj, method = RPCAIntegration, k.weight = 90,
+  orig.reduction = "pca", new.reduction = "integrated.rpca",
+  verbose = FALSE
+)
+
+head(obj@meta.data)
+
+# Find clusters after integration
+obj <- FindClusters(obj, resolution = 2.5, cluster.name = "rpca_clusters")
+obj <- RunUMAP(obj, reduction = "integrated.rpca", dims = 1:30, reduction.name = "umap.rpca")
+
+# obj <- JoinLayers(obj) 
+
+
+##########
+
+setwd("/Users/eguo/Downloads/integrated BCRF set 1-10 & EN")
+
+DimPlot(obj, reduction = "umap.rpca", label = TRUE)
+ggsave("umap.rpca.png", width = 8, height = 8)
+
+obj$tissue[is.na(obj$tissue)] <- 'NA'
+DimPlot(obj, reduction = "umap.rpca", label = TRUE, group.by = "tissue")
+ggsave("tissue.png", width = 8, height = 8)
+
+DimPlot(obj, reduction = "umap.rpca", group.by = "protocol")
+ggsave("protocol.png", width = 8, height = 8)
+
+DimPlot(obj, reduction = "umap.rpca", group.by = "dxs")
+ggsave("dxs.png", width = 8, height = 8)  
+
+DimPlot(obj, reduction = "umap.rpca", group.by = "dx")
+ggsave("dx.png", width = 12, height = 8)
+
+n_patients <- length(unique(obj$patient))
+DimPlot(obj, reduction = "umap.rpca", group.by = "patient") +
+  ggtitle(paste("n patients = ", n_patients))
+ggsave("patient.png", width = 12, height = 8)  
+
+DimPlot(obj, reduction = "umap.rpca", group.by = "sequence batch number")
+ggsave("sequence batch number.png", width = 12, height = 8)
+
+# log2 of total counts (library size) per sample
+obj$log2counts <- log2(obj$nCount_RNA + 1)
+log2counts <- FeaturePlot(obj,
+            features = "log2counts",
+            combine = TRUE, 
+            label.size = 1) 
+print(log2counts)
+ggsave("log2counts.png", width = 8, height = 8)  
+
+
+FeaturePlot(obj, features = c("ESR1", "ERBB2", "MYC", "TP53", "PIK3CA"), cols = c("red", "blue"))
+ggsave("genes.png", width = 8, height = 8)
+
+saveRDS(obj, file = "/Users/eguo/Downloads/integrated_BCRF_set_1-10_&_EN.rds")
+
+
+
+
+#########
+
+cluster_markers_all <- FindAllMarkers(obj, 
+                       only.pos = FALSE,  # Includes both pos and neg markers
+                       min.pct = 0.1,     # Genes must be expressed in min 10% of samples in a cluster
+                       logfc.threshold = 0.25,  # LFC threshold
+                       test.use = DESeq2)
+
+head(cluster_markers_all)
+
+# Filter by adj pval and Log2FC
+cluster_markers_filtered <- cluster_markers_all %>%
+  filter(p_val_adj < 0.05)
+
+top_genes_per_cluster <- cluster_markers_filtered %>%
+  filter(avg_log2FC > 1 | avg_log2FC < -1) %>%   # Filter for log2FC > 1 or < -1
+  group_by(cluster) %>%                          # Group by cluster
+  top_n(100, wt = abs(avg_log2FC)) %>%           # Select top DE genes by avg_log2FC for each cluster
+  ungroup()
+```
+
