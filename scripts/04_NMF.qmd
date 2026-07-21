@@ -52,7 +52,7 @@ identical(colnames(Ep_counts_corrected), rownames(Ep_metadata)) # TRUE
 
 # Create DESeqDataSet from subset counts and group information 
 Ep_dds <- DESeqDataSetFromMatrix(
-  countData = Ep_counts,
+  countData = Ep_counts_corrected,
   colData = Ep_metadata,
   design = ~ 1 # This design parameter means "no design", for normalization only
   )
@@ -128,10 +128,10 @@ Ep_vdata <- readRDS("../data/NMF/Ep/Ep_vdata")
 # run NMF from 4 to 10 factors, 30 times (takes time and memory) and catch errors
 # NMF is applied to filtered data vdata, testing 4-10 factors or clusters
 # nrun specifies that each NMF run should be repeated n times for robustness
-Ep_res <- nmf(Ep_vdata, 4:10, nrun=30, .opt="vp15", seed = 67)
+Ep_res_corrected <- nmf(Ep_vdata, 4:10, nrun=30, .opt="vp15", seed = 67)
 
 # Save results and continue with further analysis
-save(Ep_res, file = "data/NMF/Ep/Ep_res.RData")
+save(Ep_res_corrected, file = "data/NMF/Ep/Ep_res_corrected.RData")
 
 # after NMF results, determine optimal number of factors using silhouette score or cophenetic correlation
 ```
@@ -259,3 +259,15 @@ save(Str_res, file = "data/NMF/Str_corrected/Str_res_corrected.RData")
 
 # after NMF results, determine optimal number of factors using silhouette score or cophenetic correlation
 ```
+
+
+
+```{r}
+Ep_vdata <- readRDS("data/NMF/Ep/Ep_vdata.rds")  # whatever the uncorrected input was called
+Ep_vdata_corrected <- readRDS("data/NMF/Ep_corrected/Ep_vdata_corrected.rds")
+
+identical(Ep_vdata, Ep_vdata_corrected)
+dim(Ep_vdata); dim(Ep_vdata_corrected)
+all.equal(Ep_vdata, Ep_vdata_corrected)
+```
+

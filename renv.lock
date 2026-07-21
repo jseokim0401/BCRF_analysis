@@ -2254,6 +2254,32 @@
       "Repository": "CRAN",
       "Encoding": "UTF-8"
     },
+    "XML": {
+      "Package": "XML",
+      "Version": "3.99-0.23",
+      "Source": "Repository",
+      "Authors@R": "c(person(\"CRAN Team\", role = \"ctb\", email = \"CRAN@r-project.org\", comment = \"de facto maintainer in 2013-2026\"), person(\"Duncan\", \"Temple Lang\", role = \"aut\", email = \"duncan@r-project.org\", comment = c(ORCID = \"0000-0003-0159-1546\")), person(\"Tomas\", \"Kalibera\", role = \"ctb\"), person(\"Ivan\", \"Krylov\", email = \"ikrylov@disroot.org\", role = \"cre\"))",
+      "Title": "Tools for Parsing and Generating XML Within R and S-Plus",
+      "Depends": [
+        "R (>= 4.0.0)",
+        "methods",
+        "utils"
+      ],
+      "Suggests": [
+        "bitops",
+        "RCurl"
+      ],
+      "SystemRequirements": "libxml2 (>= 2.6.3)",
+      "Description": "Many approaches for both reading and creating XML (and HTML) documents (including DTDs), both local and accessible via HTTP or FTP.  Also offers access to an 'XPath' \"interpreter\".",
+      "BugReports": "https://codeberg.org/aitap/XML/issues",
+      "License": "BSD_3_clause + file LICENSE",
+      "Collate": "AAA.R DTD.R DTDClasses.R DTDRef.R SAXMethods.R XMLClasses.R applyDOM.R assignChild.R catalog.R createNode.R dynSupports.R error.R flatTree.R nodeAccessors.R parseDTD.R schema.R summary.R tangle.R toString.R tree.R version.R xmlErrorEnums.R xmlEventHandler.R xmlEventParse.R xmlHandler.R xmlInternalSource.R xmlOutputDOM.R xmlNodes.R xmlOutputBuffer.R xmlTree.R xmlTreeParse.R htmlParse.R hashTree.R zzz.R supports.R parser.R libxmlFeatures.R xmlString.R saveXML.R namespaces.R readHTMLTable.R reflection.R xmlToDataFrame.R bitList.R compare.R encoding.R fixNS.R xmlRoot.R serialize.R xmlMemoryMgmt.R keyValueDB.R solrDocs.R XMLRErrorInfo.R xincludes.R namespaceHandlers.R tangle1.R htmlLinks.R htmlLists.R getDependencies.R getRelativeURL.R xmlIncludes.R simplifyPath.R",
+      "NeedsCompilation": "yes",
+      "Author": "CRAN Team [ctb] (de facto maintainer in 2013-2026), Duncan Temple Lang [aut] (ORCID: <https://orcid.org/0000-0003-0159-1546>), Tomas Kalibera [ctb], Ivan Krylov [cre]",
+      "Maintainer": "Ivan Krylov <ikrylov@disroot.org>",
+      "Repository": "CRAN",
+      "Encoding": "UTF-8"
+    },
     "XVector": {
       "Package": "XVector",
       "Version": "0.52.0",
@@ -2380,6 +2406,61 @@
         "R (>= 4.1.0)"
       ],
       "Repository": "CRAN"
+    },
+    "annotate": {
+      "Package": "annotate",
+      "Version": "1.90.0",
+      "Source": "Bioconductor",
+      "Title": "Annotation for microarrays",
+      "Author": "R. Gentleman",
+      "Authors@R": "c( person(\"Jeff\", \"Gentry\", role = \"aut\"), person(\"Kritika\", \"Verma\", role = \"ctb\", comment = \"Converted chromLOC vignette from Sweave to RMarkdown / HTML.\"), person(\"Manvi\", \"Yaduvanshi\", role = \"ctb\", comment = \"Converted useDataPkgs vignette from Sweave to RMarkdown / HTML.\"), person(\"Bioconductor Package Maintainer\", email = \"maintainer@bioconductor.org\", role = \"cre\"))",
+      "Description": "Using R enviroments for annotation.",
+      "Depends": [
+        "R (>= 2.10)",
+        "AnnotationDbi (>= 1.27.5)",
+        "XML"
+      ],
+      "Imports": [
+        "Biobase",
+        "DBI",
+        "xtable",
+        "graphics",
+        "utils",
+        "stats",
+        "methods",
+        "BiocGenerics (>= 0.13.8)",
+        "httr"
+      ],
+      "Suggests": [
+        "hgu95av2.db",
+        "genefilter",
+        "Biostrings (>= 2.25.10)",
+        "IRanges",
+        "rae230a.db",
+        "rae230aprobe",
+        "tkWidgets",
+        "GO.db",
+        "org.Hs.eg.db",
+        "org.Mm.eg.db",
+        "humanCHRLOC",
+        "Rgraphviz",
+        "RUnit",
+        "BiocStyle",
+        "knitr"
+      ],
+      "VignetteBuilder": "knitr",
+      "License": "Artistic-2.0",
+      "LazyLoad": "yes",
+      "Collate": "AllGenerics.R ACCNUMStats.R Amat.R AnnMaps.R chromLocation.R compatipleVersions.R findNeighbors.R getData.R getPMInfo.R getSeq4ACC.R GOhelpers.R homoData.R html.R isValidKey.R LL2homology.R pmid2MIAME.R pubMedAbst.R query.R readGEOAnn.R serializeEnv.R blastSequences.R zzz.R test_annotate_package.R",
+      "biocViews": "Annotation, Pathways, GO",
+      "Config/pak/sysreqs": "libpng-dev libxml2-dev libssl-dev zlib1g-dev",
+      "Repository": "https://bioc-release.r-universe.dev",
+      "NeedsCompilation": "no",
+      "Maintainer": "Bioconductor Package Maintainer <maintainer@bioconductor.org>",
+      "RemoteType": "repository",
+      "RemoteUrl": "https://github.com/bioc/annotate",
+      "RemoteRef": "RELEASE_3_23",
+      "RemoteSha": "d5d12367bcb89faaee04b79471f3285504a1faa6"
     },
     "ape": {
       "Package": "ape",
@@ -3954,6 +4035,53 @@
       "Maintainer": "Hadley Wickham <hadley@posit.co>",
       "Repository": "CRAN"
     },
+    "edgeR": {
+      "Package": "edgeR",
+      "Version": "4.10.1",
+      "Source": "Bioconductor",
+      "Date": "2026-05-23",
+      "Title": "Empirical Analysis of Digital Gene Expression Data in R",
+      "Description": "Differential expression analysis of sequence count data. Implements a range of statistical methodology based on the negative binomial distributions, including empirical Bayes estimation, exact tests, generalized linear models, quasi-likelihood, and gene set enrichment. Can perform differential analyses of any type of omics data that produces read counts, including RNA-seq, ChIP-seq, ATAC-seq, Bisulfite-seq, SAGE, CAGE, metabolomics, or proteomics spectral counts. RNA-seq analyses can be conducted at the gene or isoform level, and tests can be conducted for differential exon or transcript usage.",
+      "Author": "Yunshun Chen, Lizhong Chen, Aaron TL Lun, Davis J McCarthy, Pedro Baldoni, Matthew E Ritchie, Belinda Phipson, Yifang Hu, Xiaobei Zhou, Mark D Robinson, Gordon K Smyth",
+      "Maintainer": "Yunshun Chen <yuchen@wehi.edu.au>, Gordon Smyth <smyth@wehi.edu.au>, Aaron Lun <infinite.monkeys.with.keyboards@gmail.com>, Mark Robinson <mark.robinson@imls.uzh.ch>",
+      "License": "GPL (>=2)",
+      "Depends": [
+        "R (>= 3.6.0)",
+        "limma (>= 3.63.6)"
+      ],
+      "Imports": [
+        "methods",
+        "graphics",
+        "stats",
+        "utils",
+        "locfit"
+      ],
+      "Suggests": [
+        "jsonlite",
+        "knitr",
+        "Matrix",
+        "nanoparquet",
+        "readr",
+        "rhdf5",
+        "SeuratObject",
+        "splines",
+        "AnnotationDbi",
+        "Biobase",
+        "BiocStyle",
+        "org.Hs.eg.db",
+        "S4Vectors",
+        "SummarizedExperiment"
+      ],
+      "VignetteBuilder": "knitr",
+      "URL": "https://bioinf.wehi.edu.au/edgeR/, https://bioconductor.org/packages/edgeR",
+      "biocViews": "AlternativeSplicing, BatchEffect, Bayesian, BiomedicalInformatics, CellBiology, ChIPSeq, Clustering, Coverage, DifferentialExpression, DifferentialMethylation, DifferentialSplicing, DNAMethylation, Epigenetics, FunctionalGenomics, GeneExpression, GeneSetEnrichment, Genetics, Genetics, ImmunoOncology, MultipleComparison, Normalization, Pathways, Proteomics, QualityControl, Regression, RNASeq, SAGE, Sequencing, SingleCell, SystemsBiology, TimeCourse, Transcription, Transcriptomics",
+      "NeedsCompilation": "yes",
+      "Repository": "https://bioc-release.r-universe.dev",
+      "RemoteType": "repository",
+      "RemoteUrl": "https://github.com/bioc/edgeR",
+      "RemoteRef": "RELEASE_3_23",
+      "RemoteSha": "5a71e43e4c203bf14f0201e9151d4fcfd00e8f0d"
+    },
     "enrichit": {
       "Package": "enrichit",
       "Version": "0.1.5",
@@ -4822,6 +4950,50 @@
       "Author": "David Gohel [aut, cre], Hadley Wickham [aut], Lionel Henry [aut], Jeroen Ooms [aut] (ORCID: <https://orcid.org/0000-0002-4035-0289>), Yixuan Qiu [ctb], R Core Team [cph] (Cairo code from X11 device), ArData [cph], RStudio [cph]",
       "Maintainer": "David Gohel <david.gohel@ardata.fr>",
       "Repository": "CRAN"
+    },
+    "genefilter": {
+      "Package": "genefilter",
+      "Version": "1.94.0",
+      "Source": "Bioconductor",
+      "Title": "genefilter: methods for filtering genes from high-throughput experiments",
+      "Authors@R": "c( person(\"Robert\", \"Gentleman\", role = \"aut\"), person(\"Vincent J.\", \"Carey\", role = \"aut\"), person(\"Wolfgang\", \"Huber\", role = \"aut\"), person(\"Florian\", \"Hahne\", role = \"aut\"), person(\"Emmanuel\", \"Taiwo\", role = \"ctb\", comment = \"'howtogenefinder' vignette translation from Sweave to RMarkdown / HTML.\"), person(\"Khadijah\", \"Amusat\", role = \"ctb\", comment = \"Converted genefilter vignette from Sweave to RMarkdown / HTML.\"), person(\"Bioconductor Package Maintainer\", role = \"cre\", email = \"maintainer@bioconductor.org\"))",
+      "Description": "Some basic functions for filtering genes.",
+      "Suggests": [
+        "class",
+        "hgu95av2.db",
+        "tkWidgets",
+        "ALL",
+        "ROC",
+        "RColorBrewer",
+        "BiocStyle",
+        "knitr"
+      ],
+      "Imports": [
+        "MatrixGenerics (>= 1.11.1)",
+        "AnnotationDbi",
+        "annotate",
+        "Biobase",
+        "graphics",
+        "methods",
+        "stats",
+        "survival",
+        "grDevices"
+      ],
+      "License": "Artistic-2.0",
+      "LazyLoad": "yes",
+      "LazyData": "yes",
+      "Collate": "AllClasses.R AllGenerics.R all.R dist2.R eSetFilter.R fastT.R filter_volcano.R filtered_p.R genefinder.R half.range.mode.R kappa_p.R nsFilter.R rejection_plot.R rowROC-accessors.R rowSds.R rowpAUCs-methods.R rowttests-methods.R shorth.R zzz.R",
+      "biocViews": "Microarray",
+      "VignetteBuilder": "knitr",
+      "Config/pak/sysreqs": "libpng-dev libxml2-dev libssl-dev zlib1g-dev",
+      "Repository": "https://bioc-release.r-universe.dev",
+      "NeedsCompilation": "yes",
+      "Author": "Robert Gentleman [aut], Vincent J. Carey [aut], Wolfgang Huber [aut], Florian Hahne [aut], Emmanuel Taiwo [ctb] ('howtogenefinder' vignette translation from Sweave to RMarkdown / HTML.), Khadijah Amusat [ctb] (Converted genefilter vignette from Sweave to RMarkdown / HTML.), Bioconductor Package Maintainer [cre]",
+      "Maintainer": "Bioconductor Package Maintainer <maintainer@bioconductor.org>",
+      "RemoteType": "repository",
+      "RemoteUrl": "https://github.com/bioc/genefilter",
+      "RemoteRef": "RELEASE_3_23",
+      "RemoteSha": "68e3734856e6ba61b0681f5c85d15bda2448d1d9"
     },
     "generics": {
       "Package": "generics",
@@ -6681,6 +6853,54 @@
       "Maintainer": "Lionel Henry <lionel@posit.co>",
       "Repository": "CRAN"
     },
+    "limma": {
+      "Package": "limma",
+      "Version": "3.68.4",
+      "Source": "Bioconductor",
+      "Date": "2026-05-31",
+      "Title": "Linear Models for Microarray and Omics Data",
+      "Description": "Data analysis, linear models and differential expression for omics data.",
+      "Authors@R": "c(person(given = \"Gordon\", family = \"Smyth\", role = c(\"cre\", \"aut\"), email = \"smyth@wehi.edu.au\", comment = c(ORCID = \"0000-0001-9221-2892\")), person(given = \"Yifang\", family = \"Hu\", role = \"ctb\"), person(given = \"Matthew\", family = \"Ritchie\", role = \"ctb\"), person(given = \"Jeremy\", family = \"Silver\", role = \"ctb\"), person(given = \"James\", family = \"Wettenhall\", role = \"ctb\"), person(given = \"Davis\", family = \"McCarthy\", role = \"ctb\"), person(given = \"Di\", family = \"Wu\", role = \"ctb\"), person(given = \"Wei\", family = \"Shi\", role = \"ctb\"), person(given = \"Belinda\", family = \"Phipson\", role = \"ctb\"), person(given = \"Aaron\", family = \"Lun\", role = \"ctb\"), person(given = \"Natalie\", family = \"Thorne\", role = \"ctb\"), person(given = \"Alicia\", family = \"Oshlack\", role = \"ctb\"), person(given = \"Carolyn\", family = \"de Graaf\", role = \"ctb\"), person(given = \"Yunshun\", family = \"Chen\", role = \"ctb\"), person(given = \"Goknur\", family = \"Giner\", role = \"ctb\"), person(given = \"Mette\", family = \"Langaas\", role = \"ctb\"), person(given = \"Egil\", family = \"Ferkingstad\", role = \"ctb\"), person(given = \"Marcus\", family = \"Davy\", role = \"ctb\"), person(given = \"Francois\", family = \"Pepin\", role = \"ctb\"), person(given = \"Dongseok\", family = \"Choi\", role = \"ctb\"), person(given = \"Charity\", family = \"Law\", role = \"ctb\"), person(given = \"Mengbo\", family = \"Li\", role = \"ctb\"), person(given = \"Lizhong\", family = \"Chen\", role = \"ctb\", comment = c(ORCID = \"0000-0002-8326-6781\")) )",
+      "License": "GPL (>=2)",
+      "Depends": [
+        "R (>= 3.6.0)"
+      ],
+      "Imports": [
+        "grDevices",
+        "graphics",
+        "stats",
+        "utils",
+        "methods",
+        "statmod"
+      ],
+      "Suggests": [
+        "BiasedUrn",
+        "ellipse",
+        "gplots",
+        "knitr",
+        "locfit",
+        "MASS",
+        "splines",
+        "affy",
+        "AnnotationDbi",
+        "Biobase",
+        "BiocStyle",
+        "GO.db",
+        "illuminaio",
+        "org.Hs.eg.db",
+        "vsn"
+      ],
+      "VignetteBuilder": "knitr",
+      "URL": "https://bioinf.wehi.edu.au/limma/",
+      "biocViews": "ExonArray, GeneExpression, Transcription, AlternativeSplicing, DifferentialExpression, DifferentialSplicing, GeneSetEnrichment, DataImport, Bayesian, Clustering, Regression, TimeCourse, Microarray, MicroRNAArray, mRNAMicroarray, OneChannel, ProprietaryPlatforms, TwoChannel, Sequencing, RNASeq, BatchEffect, MultipleComparison, Normalization, Preprocessing, QualityControl, BiomedicalInformatics, CellBiology, Cheminformatics, Epigenetics, FunctionalGenomics, Genetics, ImmunoOncology, Metabolomics, Proteomics, SystemsBiology, Transcriptomics",
+      "Repository": "https://bioc-release.r-universe.dev",
+      "RemoteUrl": "https://github.com/bioc/limma",
+      "RemoteRef": "RELEASE_3_23",
+      "RemoteSha": "7c11dae9f0568f17d879280450e557f8851743d5",
+      "NeedsCompilation": "yes",
+      "Author": "Gordon Smyth [cre, aut] (ORCID: <https://orcid.org/0000-0001-9221-2892>), Yifang Hu [ctb], Matthew Ritchie [ctb], Jeremy Silver [ctb], James Wettenhall [ctb], Davis McCarthy [ctb], Di Wu [ctb], Wei Shi [ctb], Belinda Phipson [ctb], Aaron Lun [ctb], Natalie Thorne [ctb], Alicia Oshlack [ctb], Carolyn de Graaf [ctb], Yunshun Chen [ctb], Goknur Giner [ctb], Mette Langaas [ctb], Egil Ferkingstad [ctb], Marcus Davy [ctb], Francois Pepin [ctb], Dongseok Choi [ctb], Charity Law [ctb], Mengbo Li [ctb], Lizhong Chen [ctb] (ORCID: <https://orcid.org/0000-0002-8326-6781>)",
+      "Maintainer": "Gordon Smyth <smyth@wehi.edu.au>"
+    },
     "listenv": {
       "Package": "listenv",
       "Version": "1.0.0",
@@ -6906,6 +7126,39 @@
       "NeedsCompilation": "no",
       "Author": "Hadley Wickham [aut], Jim Hester [aut], Winston Chang [aut, cre], Kirill Müller [aut], Daniel Cook [aut], Mark Edmondson [ctb]",
       "Maintainer": "Winston Chang <winston@rstudio.com>",
+      "Repository": "CRAN"
+    },
+    "mgcv": {
+      "Package": "mgcv",
+      "Version": "1.9-4",
+      "Source": "Repository",
+      "Authors@R": "person(given = \"Simon\", family = \"Wood\", role = c(\"aut\", \"cre\"), email = \"simon.wood@r-project.org\")",
+      "Title": "Mixed GAM Computation Vehicle with Automatic Smoothness Estimation",
+      "Description": "Generalized additive (mixed) models, some of their extensions and  other generalized ridge regression with multiple smoothing  parameter estimation by (Restricted) Marginal Likelihood,  Cross Validation and similar, or using iterated nested Laplace approximation for fully Bayesian inference. See Wood (2025) <doi:10.1146/annurev-statistics-112723-034249> for an overview. Includes a gam() function, a wide variety of smoothers, 'JAGS' support and distributions beyond the exponential family.",
+      "Priority": "recommended",
+      "Depends": [
+        "R (>= 4.4.0)",
+        "nlme (>= 3.1-64)"
+      ],
+      "Imports": [
+        "methods",
+        "stats",
+        "graphics",
+        "Matrix",
+        "splines",
+        "utils"
+      ],
+      "Suggests": [
+        "parallel",
+        "survival",
+        "MASS"
+      ],
+      "LazyLoad": "yes",
+      "ByteCompile": "yes",
+      "License": "GPL (>= 2)",
+      "NeedsCompilation": "yes",
+      "Author": "Simon Wood [aut, cre]",
+      "Maintainer": "Simon Wood <simon.wood@r-project.org>",
       "Repository": "CRAN"
     },
     "mime": {
@@ -9492,6 +9745,31 @@
       "Repository": "CRAN",
       "Encoding": "UTF-8"
     },
+    "statmod": {
+      "Package": "statmod",
+      "Version": "1.5.2",
+      "Source": "Repository",
+      "Date": "2026-05-17",
+      "Title": "Statistical Modeling",
+      "Authors@R": "c(person(given = \"Gordon\", family = \"Smyth\", role = c(\"cre\", \"aut\"), email = \"smyth@wehi.edu.au\"), person(given = \"Lizhong\", family = \"Chen\", role = \"aut\"), person(given = \"Yifang\", family = \"Hu\", role = \"ctb\"), person(given = \"Peter\", family = \"Dunn\", role = \"ctb\"), person(given = \"Belinda\", family = \"Phipson\", role = \"ctb\"), person(given = \"Yunshun\", family = \"Chen\", role = \"ctb\"))",
+      "Maintainer": "Gordon Smyth <smyth@wehi.edu.au>",
+      "Depends": [
+        "R (>= 3.0.0)"
+      ],
+      "Imports": [
+        "stats",
+        "graphics"
+      ],
+      "Suggests": [
+        "MASS",
+        "tweedie"
+      ],
+      "Description": "A collection of algorithms and functions to aid statistical modeling. Includes limiting dilution analysis (aka ELDA), growth curve comparisons, mixed linear models, heteroscedastic regression, inverse-Gaussian probability calculations, Gauss quadrature and a secure convergence algorithm for nonlinear models. Also includes advanced generalized linear model functions including Tweedie and Digamma distributional families, secure convergence and exact distributional calculations for unit deviances.",
+      "License": "GPL-2 | GPL-3",
+      "NeedsCompilation": "yes",
+      "Author": "Gordon Smyth [cre, aut], Lizhong Chen [aut], Yifang Hu [ctb], Peter Dunn [ctb], Belinda Phipson [ctb], Yunshun Chen [ctb]",
+      "Repository": "CRAN"
+    },
     "stringi": {
       "Package": "stringi",
       "Version": "1.8.7",
@@ -9596,6 +9874,46 @@
       "Author": "Terry M Therneau [aut, cre], Thomas Lumley [ctb, trl] (original S->R port and R maintainer until 2009), Atkinson Elizabeth [ctb], Crowson Cynthia [ctb]",
       "Maintainer": "Terry M Therneau <therneau.terry@mayo.edu>",
       "Repository": "CRAN"
+    },
+    "sva": {
+      "Package": "sva",
+      "Version": "3.60.0",
+      "Source": "Bioconductor",
+      "Title": "Surrogate Variable Analysis",
+      "Author": "Jeffrey T. Leek <jtleek@gmail.com>, W. Evan Johnson <wej@bu.edu>, Hilary S. Parker <hiparker@jhsph.edu>, Elana J. Fertig <ejfertig@jhmi.edu>, Andrew E. Jaffe <ajaffe@jhsph.edu>, Yuqing Zhang <zhangyuqing.pkusms@gmail.com>, John D. Storey <jstorey@princeton.edu>, Leonardo Collado Torres <lcolladotor@gmail.com>",
+      "Description": "The sva package contains functions for removing batch effects and other unwanted variation in high-throughput experiment. Specifically, the sva package contains functions for the identifying and building surrogate variables for high-dimensional data sets. Surrogate variables are covariates constructed directly from high-dimensional data (like gene expression/RNA sequencing/methylation/brain imaging data) that can be used in subsequent analyses to adjust for unknown, unmodeled, or latent sources of noise. The sva package can be used to remove artifacts in three ways: (1) identifying and estimating surrogate variables for unknown sources of variation in high-throughput experiments (Leek and Storey 2007 PLoS Genetics,2008 PNAS), (2) directly removing known batch effects using ComBat (Johnson et al. 2007 Biostatistics) and (3) removing batch effects with known control probes (Leek 2014 biorXiv). Removing batch effects and using surrogate variables in differential expression analysis have been shown to reduce dependence, stabilize error rate estimates, and improve reproducibility, see (Leek and Storey 2007 PLoS Genetics, 2008 PNAS or Leek et al. 2011 Nat. Reviews Genetics).",
+      "Maintainer": "Jeffrey T. Leek <jtleek@gmail.com>, John D. Storey <jstorey@princeton.edu>, W. Evan Johnson <wej@bu.edu>",
+      "Depends": [
+        "R (>= 3.2)",
+        "mgcv",
+        "genefilter",
+        "BiocParallel"
+      ],
+      "Imports": [
+        "matrixStats",
+        "stats",
+        "graphics",
+        "utils",
+        "limma",
+        "edgeR"
+      ],
+      "Suggests": [
+        "pamr",
+        "bladderbatch",
+        "BiocStyle",
+        "zebrafishRNASeq",
+        "testthat"
+      ],
+      "License": "Artistic-2.0",
+      "biocViews": "ImmunoOncology, Microarray, StatisticalMethod, Preprocessing, MultipleComparison, Sequencing, RNASeq, BatchEffect, Normalization",
+      "RoxygenNote": "7.0.2",
+      "Config/pak/sysreqs": "libpng-dev libxml2-dev libssl-dev zlib1g-dev",
+      "Repository": "https://bioc-release.r-universe.dev",
+      "NeedsCompilation": "yes",
+      "RemoteType": "repository",
+      "RemoteUrl": "https://github.com/bioc/sva",
+      "RemoteRef": "RELEASE_3_23",
+      "RemoteSha": "87a4798db8134fd0952a516489dd555545a92d36"
     },
     "sys": {
       "Package": "sys",
