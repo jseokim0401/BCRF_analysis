@@ -51,13 +51,216 @@ Str_sample_clusters <- read.csv("data/NMF/Str/Str_all_ranks_sample_data.csv")
 Str_sample_clusters_corrected <- read.csv("data/NMF/Str_corrected/Str_all_ranks_sample_data_corrected.csv")
 ```
 
-## Ep (uncorrected), k=5
+# k=4
+
+## Str (uncorrected)
+
+### Map NMF result sampleIDs onto BCRF_Str Seurat object 
+
+```{r}
+# Extract sample and cluster info from NMF results where k=4
+Str_sample_clusters_k4 <- Str_sample_clusters |> 
+  select(Sample, Cluster, Rank) |>
+  filter(Rank == 4)
+
+# Fix mismatch between sample names 
+Str_sample_clusters_k4$Sample_clean <- gsub("\\.", "-", Str_sample_clusters_k4$Sample)
+
+# Subset BCRF_Str by NMF samples only (remove sample w/ 0 counts)
+BCRF_Str <- subset(BCRF_Str, cells = Str_sample_clusters_k4$Sample_clean)
+
+extracted <- str_match(Str_sample_clusters_k4$Sample_clean, "set\\d+_\\d+_(\\d+)")[,2]
+Str_sample_clusters_k4$sample <- extracted
+
+# force both sides to the same type before matching -- this is the #1 source of silent NAs
+Str_sample_clusters_k4$sample <- as.character(Str_sample_clusters_k4$sample)
+BCRF_Str$sample <- as.character(BCRF_Str$sample)
+
+# map onto the Seurat object
+BCRF_Str$clusters_k4 <- Str_sample_clusters_k4$Cluster[
+  match(BCRF_Str$sample, Str_sample_clusters_k4$sample)
+]
+BCRF_Str$clusters_k4 <- factor(BCRF_Str$clusters_k4)
+
+# sanity check -- how many cells got NA (i.e. sample wasn't found in your NMF table)?
+table(BCRF_Str$clusters_k4, useNA = "ifany")
+
+# 1   2   3   4 
+# 206  88  82  72 
+# Matches silhouette plot cluster numbers 
+```
+
+### Plot on existing reductions 
+
+```{r}
+# Unintegrated reduction
+p1 <- DimPlot(BCRF_Str, reduction = "umap.unintegrated") +
+  ggtitle("Original Clusters (unintegrated)")
+p2 <- DimPlot(BCRF_Str, reduction = "umap.unintegrated", group.by = "clusters_k4") +
+  ggtitle("NMF Clusters (k=4)")
+
+ggsave("plots/NMF_reclustering/Str/k4/Str_unintegrated_UMAP_comparison_k4.png", p1 + p2, width = 12, height = 6, dpi = 300)
+
+# RPCA reduction
+p3 <- DimPlot(BCRF_Str, reduction = "umap.rpca") +
+  ggtitle("Original Clusters (RPCA)")
+p4 <- DimPlot(BCRF_Str, reduction = "umap.rpca", group.by = "clusters_k4") +
+  ggtitle("NMF Clusters (k=4)")
+
+ggsave("plots/NMF_reclustering/Str/k4/Str_RPCA_UMAP_comparison_k4.png", p3 + p4, width = 12, height = 6, dpi = 300)
+
+# RPCA dxs comparison 
+p5 <- DimPlot(BCRF_Str, reduction = "umap.rpca", group.by = "dxs") +
+  ggtitle("dxs (RPCA)") 
+
+ggsave("plots/NMF_reclustering/Str/k4/Str_RPCA_dxs_UMAP_comparison_k4.png", p5 + p4, width = 12, height = 6, dpi = 300)
+```
+
+## Str_corrected
+
+### Reorient matrices correctly
+
+```{r}
+# Extract k=4 specific NMF result
+Str_res_corrected_k4 <- Str_res_corrected$fit[["4"]]
+
+# Extract basis and coefficient matrices
+w_StrC_k4 <- basis(Str_res_corrected_k4)
+h_StrC_k4 <- coef(Str_res_corrected_k4)
+
+# Transpose coefficient matrix
+StrC_NMF_embeddings_k4 <- t(h_StrC_k4)
+```
+
+### Check that cell names line up
+
+```{r}
+# Edit column names 
+colnames(StrC_NMF_embeddings_k4) <- paste0("NMF_", seq_len(ncol(StrC_NMF_embeddings_k4)))
+
+# Put sample names as rownames of embeddings object 
+rownames(StrC_NMF_embeddings_k4) <- colnames(Str_vdata_corrected)  # whatever you fed into nmf()
+
+# Change "." to "-" in NMF embedding sample names 
+rownames(StrC_NMF_embeddings_k4) <- gsub("\\.", "-", rownames(StrC_NMF_embeddings_k4))
+
+# Subset BCRF_Str by NMF samples only 
+BCRF_Str <- subset(BCRF_Str, cells = rownames(StrC_NMF_embeddings_k4))
+
+# then re-check
+identical(rownames(StrC_NMF_embeddings_k4), colnames(BCRF_Str)) # TRUE 
+```
+
+### Create DimReducObject
+
+```{r}
+BCRF_Str[["nmf_k4"]] <- CreateDimReducObject(
+  embeddings = StrC_NMF_embeddings_k4,
+  loadings   = w_StrC_k4,                # optional but nice to keep (genes x k)
+  key        = "NMF_",                   # must end in underscore, must be unique
+  assay      = DefaultAssay(BCRF_Str)
+)
+```
+
+### Run/Generate UMAP on NMF reduction instead of PCA
+
+```{r}
+BCRF_Str <- RunUMAP(
+  BCRF_Str,
+  reduction = "nmf_k4",
+  dims = 1:ncol(StrC_NMF_embeddings_k4), # or a subset of factors if some are junk
+  reduction.name = "umap_nmf_k4_",
+  reduction.key = "umapnmf_k4_"
+)
+```
+
+```{r}
+# Visualizations 
+setwd("plots/NMF_reclustering/Str_corrected/k4")
+
+DimPlot(BCRF_Str, reduction = "umap_nmf_k4_", label = TRUE)
+ggsave("umap.nmf.k5.png", width = 8, height = 8)
+
+DimPlot(BCRF_Str, reduction = "umap_nmf_k4_", group.by = "protocol")
+ggsave("protocol.png", width = 8, height = 8)
+
+DimPlot(BCRF_Str, reduction = "umap_nmf_k4_", group.by = "dxs")
+ggsave("dxs.png", width = 8, height = 8)  
+
+DimPlot(BCRF_Str, reduction = "umap_nmf_k4_", group.by = "dx")
+ggsave("dx.png", width = 12, height = 8)
+
+n_patients <- length(unique(BCRF_Str$patient))
+DimPlot(BCRF_Str, reduction = "umap_nmf_k4_", group.by = "patient") +
+  ggtitle(paste("n patients = ", n_patients))
+ggsave("patient.png", width = 12, height = 8)  
+
+DimPlot(BCRF_Str, reduction = "umap_nmf_k4_", group.by = "sequence.batch.number")
+ggsave("sequence batch number.png", width = 12, height = 8)
+```
+
+### Map NMF result sampleIDs onto BCRF_Str Seurat object 
+
+```{r}
+# Extract sample and cluster info from NMF results where k=5 
+Str_sample_clusters_corrected_k4 <- Str_sample_clusters_corrected |> 
+  select(Sample, Cluster, Rank) |>
+  filter(Rank == 4)
+
+# Fix mismatch between sample names 
+Str_sample_clusters_corrected_k4$Sample_clean <- gsub("\\.", "-", Str_sample_clusters_corrected_k4$Sample)
+
+# Subset BCRF_Str by NMF samples only (remove sample w/ 0 counts)
+BCRF_Str <- subset(BCRF_Str, cells = Str_sample_clusters_corrected_k4$Sample_clean)
+
+extracted <- str_match(Str_sample_clusters_corrected_k4$Sample_clean, "set\\d+_\\d+_(\\d+)")[,2]
+Str_sample_clusters_corrected_k4$sample <- extracted
+
+# force both sides to the same type before matching -- this is the #1 source of silent NAs
+Str_sample_clusters_corrected_k4$sample <- as.character(Str_sample_clusters_corrected_k4$sample)
+BCRF_Str$sample <- as.character(BCRF_Str$sample)
+
+# map onto the Seurat object
+BCRF_Str$clusters_k4_corrected <- Str_sample_clusters_corrected_k4$Cluster[
+  match(BCRF_Str$sample, Str_sample_clusters_corrected_k4$sample)
+]
+BCRF_Str$clusters_k4_corrected <- factor(BCRF_Str$clusters_k4_corrected)
+
+# sanity check -- how many cells got NA (i.e. sample wasn't found in your NMF table)?
+table(BCRF_Str$clusters_k4_corrected, useNA = "ifany")
+
+# 1   2   3   4 
+# 105  98  55 190 
+# Matches silhouette plot cluster numbers 
+```
+
+### Plot on existing reductions 
+
+```{r}
+# Integrated reduction
+p1 <- DimPlot(BCRF_Str, reduction = "umap_nmf_k4_") +
+  ggtitle("Original Clusters (Integrated)")
+p2 <- DimPlot(BCRF_Str, reduction = "umap_nmf_k4_", group.by = "clusters_k4_corrected") +
+  ggtitle("NMF Clusters (k=4)")
+
+ggsave("plots/NMF_reclustering/Str_corrected/k4/Str_Integrated_UMAP_comparison_k4.png", p1 + p2, width = 12, height = 6, dpi = 300)
+
+# Integrated dxs comparison 
+p3 <- DimPlot(BCRF_Str, reduction = "umap_nmf_k4_", group.by = "dxs") +
+  ggtitle("dxs (Integrated)") 
+
+ggsave("plots/NMF_reclustering/Str_corrected/k4/Str_Integrated_dxs_UMAP_comparison_k4.png", p3 + p2, width = 12, height = 6, dpi = 300)
+```
+
+# k=5
+
+## Ep (uncorrected)
 
 ### Map NMF result sampleIDs onto BCRF_Ep Seurat object 
 
 ```{r}
 # Extract sample and cluster info from NMF results where k=5 
-Ep_sample_clusters <- Ep_sample_clusters |> 
+Ep_sample_clusters_k5 <- Ep_sample_clusters |> 
   select(Sample, Cluster, Rank) |>
   filter(Rank == 5)
 ```
@@ -67,18 +270,18 @@ We want to map sample IDs from NMF results onto the existing unintegrated and rp
 Sample-level IDs in the Seurat object are under the "sample" column of its meta.data as a string of numbers. Since sample names in the NMF results data contains additional info, use regex to extract just the number string needed to match the Seurat object sample IDS.  
 
 ```{r}
-extracted <- str_match(Ep_sample_clusters$Sample, "set\\d+_\\d+_(\\d+)")[,2]
-Ep_sample_clusters$sample <- extracted
+extracted <- str_match(Ep_sample_clusters_k5$Sample, "set\\d+_\\d+_(\\d+)")[,2]
+Ep_sample_clusters_k5$sample <- extracted
 ```
 
 ```{r}
 # force both sides to the same type before matching -- this is the #1 source of silent NAs
-Ep_sample_clusters$sample <- as.character(Ep_sample_clusters$sample)
+Ep_sample_clusters_k5$sample <- as.character(Ep_sample_clusters_k5$sample)
 BCRF_Ep$sample <- as.character(BCRF_Ep$sample)
 
 # map onto the Seurat object
-BCRF_Ep$clusters_k5 <- Ep_sample_clusters$Cluster[
-  match(BCRF_Ep$sample, Ep_sample_clusters$sample)
+BCRF_Ep$clusters_k5 <- Ep_sample_clusters_k5$Cluster[
+  match(BCRF_Ep$sample, Ep_sample_clusters_k5$sample)
 ]
 BCRF_Ep$clusters_k5 <- factor(BCRF_Ep$clusters_k5)
 
@@ -88,75 +291,6 @@ table(BCRF_Ep$clusters_k5, useNA = "ifany")
 #  1   2   3   4   5 
 # 145 101  65 136  75 
 # Matches silhouette plot cluster numbers 
-```
-
-### Plot on existing reductions 
-
-```{r}
-# Unintegrated reduction
-p1 <- DimPlot(BCRF_Ep, reduction = "umap.unintegrated") +
-  ggtitle("Original Clusters (unintegrated)")
-p2 <- DimPlot(BCRF_Ep, reduction = "umap.unintegrated", group.by = "clusters_k5") +
-  ggtitle("NMF Clusters (k=5)")
-
-ggsave("plots/NMF_reclustering/Ep/k5/Ep_unintegrated_UMAP_comparison_k5.png", p1 + p2, width = 12, height = 6, dpi = 300)
-
-# RPCA reduction
-p3 <- DimPlot(BCRF_Ep, reduction = "umap.rpca") +
-  ggtitle("Original Clusters (RPCA)")
-p4 <- DimPlot(BCRF_Ep, reduction = "umap.rpca", group.by = "clusters_k5") +
-  ggtitle("NMF Clusters (k=5)")
-
-ggsave("plots/NMF_reclustering/Ep/k5/Ep_RPCA_UMAP_comparison_k5.png", p3 + p4, width = 12, height = 6, dpi = 300)
-
-# RPCA dxs comparison 
-p5 <- DimPlot(BCRF_Ep, reduction = "umap.rpca", group.by = "dxs") +
-  ggtitle("dxs (RPCA)") 
-
-ggsave("plots/NMF_reclustering/Ep/k5/Ep_RPCA_dxs_UMAP_comparison_k5.png", p5 + p4, width = 12, height = 6, dpi = 300)
-```
-
-## Str (uncorrected), k=5
-
-### Map NMF result sampleIDs onto BCRF_Str Seurat object 
-
-```{r}
-# Extract sample and cluster info from NMF results where k=5 
-Str_sample_clusters <- Str_sample_clusters |> 
-  select(Sample, Cluster, Rank) |>
-  filter(Rank == 5)
-
-
-# Subset BCRF_Str by NMF samples only (remove sample w/ 0 counts)
-BCRF_Str <- subset(BCRF_Str, cells = Str_sample_clusters$Sample)
-```
-
-We want to map sample IDs from NMF results onto the existing unintegrated and rpca integrated UMAP reductions of the Seurat object.
-
-Sample-level IDs in the Seurat object are under the "sample" column of its meta.data as a string of numbers. Since sample names in the NMF results data contains additional info, use regex to extract just the number string needed to match the Seurat object sample IDS.  
-
-```{r}
-extracted <- str_match(Str_sample_clusters$Sample, "set\\d+_\\d+_(\\d+)")[,2]
-Str_sample_clusters$sample <- extracted
-```
-
-```{r}
-# force both sides to the same type before matching -- this is the #1 source of silent NAs
-Str_sample_clusters$sample <- as.character(Str_sample_clusters$sample)
-BCRF_Str$sample <- as.character(BCRF_Str$sample)
-
-# map onto the Seurat object
-BCRF_Str$clusters_k5 <- Str_sample_clusters$Cluster[
-  match(BCRF_Str$sample, Str_sample_clusters$sample)
-]
-BCRF_Str$clusters_k5 <- factor(BCRF_Str$clusters_k5)
-
-# sanity check -- how many cells got NA (i.e. sample wasn't found in your NMF table)?
-table(BCRF_Str$clusters_k5, useNA = "ifany")
-
-# 1   2   3   4   5 
-# 49  93  95  64 140 
-# Some samples lost?  
 ```
 
 ### Plot on existing reductions 
@@ -267,21 +401,117 @@ ggsave("patient.png", width = 12, height = 8)
 
 DimPlot(BCRF_Ep, reduction = "umap_nmf_k5_", group.by = "sequence.batch.number")
 ggsave("sequence batch number.png", width = 12, height = 8)
-
-# log2 of total counts (library size) per sample
-BCRF_Ep$log2counts <- log2(BCRF_Ep$nCount_RNA + 1)
-log2counts <- FeaturePlot(BCRF_Ep,
-            features = "log2counts",
-            combine = TRUE, 
-            label.size = 1) 
-print(log2counts)
-ggsave("log2counts.png", width = 8, height = 8)  
-
-
-FeaturePlot(BCRF_Ep, features = c("ESR1", "ERBB2", "MYC", "TP53", "PIK3CA"), cols = c("red", "blue"))
-ggsave("genes.png", width = 8, height = 8)
 ```
 
+### Map NMF result sampleIDs onto BCRF_Ep Seurat object 
+
+```{r}
+# Extract sample and cluster info from NMF results where k=5 
+Ep_sample_clusters_corrected_k5 <- Ep_sample_clusters_corrected |> 
+  select(Sample, Cluster, Rank) |>
+  filter(Rank == 5)
+
+extracted <- str_match(Ep_sample_clusters_corrected_k5$Sample, "set\\d+_\\d+_(\\d+)")[,2]
+Ep_sample_clusters_corrected_k5$sample <- extracted
+
+# force both sides to the same type before matching -- this is the #1 source of silent NAs
+Ep_sample_clusters_corrected_k5$sample <- as.character(Ep_sample_clusters_corrected_k5$sample)
+BCRF_Ep$sample <- as.character(BCRF_Ep$sample)
+
+# map onto the Seurat object
+BCRF_Ep$clusters_k5_corrected <- Ep_sample_clusters_corrected_k5$Cluster[
+  match(BCRF_Ep$sample, Ep_sample_clusters_corrected_k5$sample)
+]
+BCRF_Ep$clusters_k5_corrected <- factor(BCRF_Ep$clusters_k5_corrected)
+
+# sanity check -- how many cells got NA (i.e. sample wasn't found in your NMF table)?
+table(BCRF_Ep$clusters_k5_corrected, useNA = "ifany")
+
+# 1   2   3   4   5 
+# 120  49 123 164  66 
+# Matches silhouette plot cluster numbers 
+```
+
+### Plot on existing reductions 
+
+```{r}
+# Integrated reduction 
+p1 <- DimPlot(BCRF_Ep, reduction = "umap_nmf_k5_") +
+  ggtitle("Original Clusters (Integrated)")
+p2 <- DimPlot(BCRF_Ep, reduction = "umap_nmf_k5_", group.by = "clusters_k5_corrected") +
+  ggtitle("NMF Clusters (k=5)")
+
+ggsave("plots/NMF_reclustering/Ep_corrected/k5/Ep_integrated_UMAP_comparison_k5.png", p1 + p2, width = 12, height = 6, dpi = 300)
+
+# RPCA dxs comparison 
+p3 <- DimPlot(BCRF_Ep, reduction = "umap_nmf_k5_", group.by = "dxs") +
+  ggtitle("dxs (Integrated)") 
+
+ggsave("plots/NMF_reclustering/Ep_corrected/k5/Ep_integrated_dxs_UMAP_comparison_k5.png", p3 + p2, width = 12, height = 6, dpi = 300)
+```
+
+## Str (uncorrected), k=5
+
+### Map NMF result sampleIDs onto BCRF_Str Seurat object 
+
+```{r}
+# Extract sample and cluster info from NMF results where k=5 
+Str_sample_clusters_k5 <- Str_sample_clusters |> 
+  select(Sample, Cluster, Rank) |>
+  filter(Rank == 5)
+
+# Fix mismatch between sample names 
+Str_sample_clusters_k5$Sample_clean <- gsub("\\.", "-", Str_sample_clusters_k5$Sample)
+
+# Subset BCRF_Str by NMF samples only (remove sample w/ 0 counts)
+BCRF_Str <- subset(BCRF_Str, cells = Str_sample_clusters_k5$Sample_clean)
+
+extracted <- str_match(Str_sample_clusters_k5$Sample_clean, "set\\d+_\\d+_(\\d+)")[,2]
+Str_sample_clusters_k5$sample <- extracted
+
+# force both sides to the same type before matching -- this is the #1 source of silent NAs
+Str_sample_clusters_k5$sample <- as.character(Str_sample_clusters_k5$sample)
+BCRF_Str$sample <- as.character(BCRF_Str$sample)
+
+# map onto the Seurat object
+BCRF_Str$clusters_k5 <- Str_sample_clusters_k5$Cluster[
+  match(BCRF_Str$sample, Str_sample_clusters_k5$sample)
+]
+BCRF_Str$clusters_k5 <- factor(BCRF_Str$clusters_k5)
+
+# sanity check -- how many cells got NA (i.e. sample wasn't found in your NMF table)?
+table(BCRF_Str$clusters_k5, useNA = "ifany")
+
+# 1   2   3   4   5 
+# 49  98  95  66 140 
+# Matches silhouette plot cluster numbers 
+```
+
+### Plot on existing reductions 
+
+```{r}
+# Unintegrated reduction
+p1 <- DimPlot(BCRF_Str, reduction = "umap.unintegrated") +
+  ggtitle("Original Clusters (unintegrated)")
+p2 <- DimPlot(BCRF_Str, reduction = "umap.unintegrated", group.by = "clusters_k5") +
+  ggtitle("NMF Clusters (k=5)")
+
+ggsave("plots/NMF_reclustering/Str/k5/Str_unintegrated_UMAP_comparison_k5.png", p1 + p2, width = 12, height = 6, dpi = 300)
+
+# RPCA reduction
+p3 <- DimPlot(BCRF_Str, reduction = "umap.rpca") +
+  ggtitle("Original Clusters (RPCA)")
+p4 <- DimPlot(BCRF_Str, reduction = "umap.rpca", group.by = "clusters_k5") +
+  ggtitle("NMF Clusters (k=5)")
+
+ggsave("plots/NMF_reclustering/Str/k5/Str_RPCA_UMAP_comparison_k5.png", p3 + p4, width = 12, height = 6, dpi = 300)
+
+# RPCA dxs comparison 
+p5 <- DimPlot(BCRF_Str, reduction = "umap.rpca", group.by = "dxs") +
+  ggtitle("dxs (RPCA)") 
+
+ggsave("plots/NMF_reclustering/Str/k5/Str_RPCA_dxs_UMAP_comparison_k5.png", p5 + p4, width = 12, height = 6, dpi = 300)
+```
 ## Str_corrected
 
 ### Reorient matrices correctly
@@ -300,8 +530,6 @@ StrC_NMF_embeddings_k5 <- t(h_StrC_k5)
 
 ### Check that cell names line up
 
-rownames(nmf_embeddings) needs to exactly match colnames(seurat_obj), in the same order or matchable.
-
 ```{r}
 # Edit column names 
 colnames(StrC_NMF_embeddings_k5) <- paste0("NMF_", seq_len(ncol(StrC_NMF_embeddings_k5)))
@@ -312,42 +540,29 @@ rownames(StrC_NMF_embeddings_k5) <- colnames(Str_vdata_corrected)  # whatever yo
 # Change "." to "-" in NMF embedding sample names 
 rownames(StrC_NMF_embeddings_k5) <- gsub("\\.", "-", rownames(StrC_NMF_embeddings_k5))
 
-# sanity check before proceeding
-all(rownames(StrC_NMF_embeddings_k5) %in% colnames(BCRF_Str)) # TRUE
-identical(rownames(StrC_NMF_embeddings_k5), colnames(BCRF_Str)) # FALSE 
-identical(sort(rownames(StrC_NMF_embeddings_k5)), sort(colnames(BCRF_Str))) # FALSE 
-
-# Returns FALSE b/c sample removed for NMF; Confirm: 
-# How many cells in each, and what's the difference?
-length(rownames(StrC_NMF_embeddings_k5)) # 448
-length(colnames(BCRF_Str)) # 449
-
-setdiff(colnames(BCRF_Str), rownames(StrC_NMF_embeddings_k5)) # "set1_3_11886_364_NL_S_S2_R1_001" in Seurat obj but NOT in NMF 
-setdiff(rownames(StrC_NMF_embeddings_k5), colnames(BCRF_Str))  # everything in NMF is in Seurat obj
-
 # Subset BCRF_Str by NMF samples only 
-BCRF_StrC_matched <- subset(BCRF_Str, cells = rownames(StrC_NMF_embeddings_k5))
+BCRF_Str <- subset(BCRF_Str, cells = rownames(StrC_NMF_embeddings_k5))
 
 # then re-check
-identical(rownames(StrC_NMF_embeddings_k5), colnames(BCRF_StrC_matched)) # TRUE 
+identical(rownames(StrC_NMF_embeddings_k5), colnames(BCRF_Str)) # TRUE 
 ```
 
 ### Create DimReducObject
 
 ```{r}
-BCRF_StrC_matched[["nmf_k5"]] <- CreateDimReducObject(
+BCRF_Str[["nmf_k5"]] <- CreateDimReducObject(
   embeddings = StrC_NMF_embeddings_k5,
   loadings   = w_StrC_k5,                # optional but nice to keep (genes x k)
   key        = "NMF_",                   # must end in underscore, must be unique
-  assay      = DefaultAssay(BCRF_StrC_matched)
+  assay      = DefaultAssay(BCRF_Str)
 )
 ```
 
 ### Run/Generate UMAP on NMF reduction instead of PCA
 
 ```{r}
-BCRF_StrC_matched <- RunUMAP(
-  BCRF_StrC_matched,
+BCRF_Str <- RunUMAP(
+  BCRF_Str,
   reduction = "nmf_k5",
   dims = 1:ncol(StrC_NMF_embeddings_k5), # or a subset of factors if some are junk
   reduction.name = "umap_nmf_k5_",
@@ -378,17 +593,457 @@ ggsave("patient.png", width = 12, height = 8)
 
 DimPlot(BCRF_StrC_matched, reduction = "umap_nmf_k5_", group.by = "sequence.batch.number")
 ggsave("sequence batch number.png", width = 12, height = 8)
-
-# log2 of total counts (library size) per sample
-BCRF_StrC_matched$log2counts <- log2(BCRF_StrC_matched$nCount_RNA + 1)
-log2counts <- FeaturePlot(BCRF_StrC_matched,
-            features = "log2counts",
-            combine = TRUE, 
-            label.size = 1) 
-print(log2counts)
-ggsave("log2counts.png", width = 8, height = 8)  
-
-
-FeaturePlot(BCRF_StrC_matched, features = c("ESR1", "ERBB2", "MYC", "TP53", "PIK3CA"), cols = c("red", "blue"))
-ggsave("genes.png", width = 8, height = 8)
 ```
+
+### Map NMF result sampleIDs onto BCRF_Str Seurat object 
+
+```{r}
+# Extract sample and cluster info from NMF results where k=5 
+Str_sample_clusters_corrected_k5 <- Str_sample_clusters_corrected |> 
+  select(Sample, Cluster, Rank) |>
+  filter(Rank == 5)
+
+# Fix mismatch between sample names 
+Str_sample_clusters_corrected_k5$Sample_clean <- gsub("\\.", "-", Str_sample_clusters_corrected_k5$Sample)
+
+# Subset BCRF_Str by NMF samples only (remove sample w/ 0 counts)
+BCRF_Str <- subset(BCRF_Str, cells = Str_sample_clusters_corrected_k5$Sample_clean)
+
+extracted <- str_match(Str_sample_clusters_corrected_k5$Sample_clean, "set\\d+_\\d+_(\\d+)")[,2]
+Str_sample_clusters_corrected_k5$sample <- extracted
+
+# force both sides to the same type before matching -- this is the #1 source of silent NAs
+Str_sample_clusters_corrected_k5$sample <- as.character(Str_sample_clusters_corrected_k5$sample)
+BCRF_Str$sample <- as.character(BCRF_Str$sample)
+
+# map onto the Seurat object
+BCRF_Str$clusters_k5_corrected <- Str_sample_clusters_corrected_k5$Cluster[
+  match(BCRF_Str$sample, Str_sample_clusters_corrected_k5$sample)
+]
+BCRF_Str$clusters_k5_corrected <- factor(BCRF_Str$clusters_k5_corrected)
+
+# sanity check -- how many cells got NA (i.e. sample wasn't found in your NMF table)?
+table(BCRF_Str$clusters_k5_corrected, useNA = "ifany")
+
+# 1   2   3   4   5 
+# 110  62  97  39 140 
+# Matches silhouette plot cluster numbers 
+```
+
+### Plot on existing reductions 
+
+```{r}
+# Integrated reduction
+p1 <- DimPlot(BCRF_Str, reduction = "umap_nmf_k5_") +
+  ggtitle("Original Clusters (Integrated)")
+p2 <- DimPlot(BCRF_Str, reduction = "umap_nmf_k5_", group.by = "clusters_k5_corrected") +
+  ggtitle("NMF Clusters (k=5)")
+
+ggsave("plots/NMF_reclustering/Str_corrected/k5/Str_Integrated_UMAP_comparison_k5.png", p1 + p2, width = 12, height = 6, dpi = 300)
+
+# Integrated dxs comparison 
+p3 <- DimPlot(BCRF_Str, reduction = "umap_nmf_k5_", group.by = "dxs") +
+  ggtitle("dxs (Integrated)") 
+
+ggsave("plots/NMF_reclustering/Str_corrected/k5/Str_Integrated_dxs_UMAP_comparison_k5.png", p3 + p2, width = 12, height = 6, dpi = 300)
+```
+
+# k=6
+
+## Ep (uncorrected)
+
+### Map NMF result sampleIDs onto BCRF_Ep Seurat object 
+
+```{r}
+# Extract sample and cluster info from NMF results where k=6 
+Ep_sample_clusters_k6 <- Ep_sample_clusters |> 
+  select(Sample, Cluster, Rank) |>
+  filter(Rank == 6)
+
+extracted <- str_match(Ep_sample_clusters_k6$Sample, "set\\d+_\\d+_(\\d+)")[,2]
+Ep_sample_clusters_k6$sample <- extracted
+
+# force both sides to the same type before matching -- this is the #1 source of silent NAs
+Ep_sample_clusters_k6$sample <- as.character(Ep_sample_clusters_k6$sample)
+BCRF_Ep$sample <- as.character(BCRF_Ep$sample)
+
+# map onto the Seurat object
+BCRF_Ep$clusters_k6 <- Ep_sample_clusters_k6$Cluster[
+  match(BCRF_Ep$sample, Ep_sample_clusters_k6$sample)
+]
+BCRF_Ep$clusters_k6 <- factor(BCRF_Ep$clusters_k6)
+
+# sanity check -- how many cells got NA (i.e. sample wasn't found in your NMF table)?
+table(BCRF_Ep$clusters_k6, useNA = "ifany")
+
+# 1   2   3   4   5   6 
+# 74 106  63 118 108  53 
+# Matches silhouette plot cluster numbers 
+```
+
+### Plot on existing reductions 
+
+```{r}
+# Unintegrated reduction
+p1 <- DimPlot(BCRF_Ep, reduction = "umap.unintegrated") +
+  ggtitle("Original Clusters (unintegrated)")
+p2 <- DimPlot(BCRF_Ep, reduction = "umap.unintegrated", group.by = "clusters_k6") +
+  ggtitle("NMF Clusters (k=6)")
+
+ggsave("plots/NMF_reclustering/Ep/k6/Ep_unintegrated_UMAP_comparison_k6.png", p1 + p2, width = 12, height = 6, dpi = 300)
+
+# RPCA reduction
+p3 <- DimPlot(BCRF_Ep, reduction = "umap.rpca") +
+  ggtitle("Original Clusters (RPCA)")
+p4 <- DimPlot(BCRF_Ep, reduction = "umap.rpca", group.by = "clusters_k6") +
+  ggtitle("NMF Clusters (k=6)")
+
+ggsave("plots/NMF_reclustering/Ep/k6/Ep_RPCA_UMAP_comparison_k6.png", p3 + p4, width = 12, height = 6, dpi = 300)
+
+# RPCA dxs comparison 
+p5 <- DimPlot(BCRF_Ep, reduction = "umap.rpca", group.by = "dxs") +
+  ggtitle("dxs (RPCA)") 
+
+ggsave("plots/NMF_reclustering/Ep/k6/Ep_RPCA_dxs_UMAP_comparison_k6.png", p5 + p4, width = 12, height = 6, dpi = 300)
+```
+
+## Ep_corrected
+
+### Reorient matrices correctly
+
+```{r}
+# Extract k=6 specific NMF result
+Ep_res_corrected_k6 <- Ep_res_corrected$fit[["6"]]
+
+# Extract basis and coefficient matrices
+w_EpC_k6 <- basis(Ep_res_corrected_k6)
+h_EpC_k6 <- coef(Ep_res_corrected_k6)
+
+# Transpose coefficient matrix
+EpC_NMF_embeddings_k6 <- t(h_EpC_k6)
+```
+
+### Check that cell names line up
+
+```{r}
+# Edit column names 
+colnames(EpC_NMF_embeddings_k6) <- paste0("NMF_", seq_len(ncol(EpC_NMF_embeddings_k6)))
+
+# Put sample names as rownames of embeddings object 
+rownames(EpC_NMF_embeddings_k6) <- colnames(Ep_vdata_corrected)  # whatever you fed into nmf()
+
+# Change "." to "-" in NMF embedding sample names 
+rownames(EpC_NMF_embeddings_k6) <- gsub("\\.", "-", rownames(EpC_NMF_embeddings_k6))
+
+# sanity check before proceeding
+all(rownames(EpC_NMF_embeddings_k6) %in% colnames(BCRF_Ep)) # TRUE
+identical(rownames(EpC_NMF_embeddings_k6), colnames(BCRF_Ep)) # TRUE
+identical(sort(rownames(EpC_NMF_embeddings_k6)), sort(colnames(BCRF_Ep))) # TRUE
+```
+
+### Create DimReducObject
+
+```{r}
+BCRF_Ep[["nmf_k6"]] <- CreateDimReducObject(
+  embeddings = EpC_NMF_embeddings_k6,
+  loadings   = w_EpC_k6,                 # optional but nice to keep (genes x k)
+  key        = "NMF_",                   # must end in underscore, must be unique
+  assay      = DefaultAssay(BCRF_Ep)
+)
+```
+
+### Run/Generate UMAP on NMF reduction instead of PCA
+
+```{r}
+BCRF_Ep <- RunUMAP(
+  BCRF_Ep,
+  reduction = "nmf_k6",
+  dims = 1:ncol(EpC_NMF_embeddings_k6), # or a subset of factors if some are junk
+  reduction.name = "umap_nmf_k6_",
+  reduction.key = "umapnmf_k6_"
+)
+```
+
+```{r}
+# Visualizations 
+setwd("plots/NMF_reclustering/Ep_corrected/k6")
+
+DimPlot(BCRF_Ep, reduction = "umap_nmf_k6_", label = TRUE)
+ggsave("umap.nmf.k6.png", width = 8, height = 8)
+
+DimPlot(BCRF_Ep, reduction = "umap_nmf_k6_", group.by = "protocol")
+ggsave("protocol.png", width = 8, height = 8)
+
+DimPlot(BCRF_Ep, reduction = "umap_nmf_k6_", group.by = "dxs")
+ggsave("dxs.png", width = 8, height = 8)  
+
+DimPlot(BCRF_Ep, reduction = "umap_nmf_k6_", group.by = "dx")
+ggsave("dx.png", width = 12, height = 8)
+
+n_patients <- length(unique(BCRF_Ep$patient))
+DimPlot(BCRF_Ep, reduction = "umap_nmf_k6_", group.by = "patient") +
+  ggtitle(paste("n patients = ", n_patients))
+ggsave("patient.png", width = 12, height = 8)  
+
+DimPlot(BCRF_Ep, reduction = "umap_nmf_k6_", group.by = "sequence.batch.number")
+ggsave("sequence batch number.png", width = 12, height = 8)
+```
+
+### Map NMF result sampleIDs onto BCRF_Ep Seurat object 
+
+```{r}
+# Extract sample and cluster info from NMF results where k=6 
+Ep_sample_clusters_corrected_k6 <- Ep_sample_clusters_corrected |> 
+  select(Sample, Cluster, Rank) |>
+  filter(Rank == 6)
+
+extracted <- str_match(Ep_sample_clusters_corrected_k6$Sample, "set\\d+_\\d+_(\\d+)")[,2]
+Ep_sample_clusters_corrected_k6$sample <- extracted
+
+# force both sides to the same type before matching -- this is the #1 source of silent NAs
+Ep_sample_clusters_corrected_k6$sample <- as.character(Ep_sample_clusters_corrected_k6$sample)
+BCRF_Ep$sample <- as.character(BCRF_Ep$sample)
+
+# map onto the Seurat object
+BCRF_Ep$clusters_k6_corrected <- Ep_sample_clusters_corrected_k6$Cluster[
+  match(BCRF_Ep$sample, Ep_sample_clusters_corrected_k6$sample)
+]
+BCRF_Ep$clusters_k6_corrected <- factor(BCRF_Ep$clusters_k6_corrected)
+
+# sanity check -- how many cells got NA (i.e. sample wasn't found in your NMF table)?
+table(BCRF_Ep$clusters_k6_corrected, useNA = "ifany")
+
+# 1   2   3   4   5   6 
+# 33  63  50 116 116 144 
+# Matches silhouette plot cluster numbers 
+```
+
+### Plot on existing reductions 
+
+```{r}
+# Integrated reduction 
+p1 <- DimPlot(BCRF_Ep, reduction = "umap_nmf_k6_") +
+  ggtitle("Original Clusters (Integrated)")
+p2 <- DimPlot(BCRF_Ep, reduction = "umap_nmf_k6_", group.by = "clusters_k6_corrected") +
+  ggtitle("NMF Clusters (k=6)")
+
+ggsave("plots/NMF_reclustering/Ep_corrected/k6/Ep_integrated_UMAP_comparison_k6.png", p1 + p2, width = 12, height = 6, dpi = 300)
+
+# RPCA dxs comparison 
+p3 <- DimPlot(BCRF_Ep, reduction = "umap_nmf_k6_", group.by = "dxs") +
+  ggtitle("dxs (Integrated)") 
+
+ggsave("plots/NMF_reclustering/Ep_corrected/k6/Ep_integrated_dxs_UMAP_comparison_k6.png", p3 + p2, width = 12, height = 6, dpi = 300)
+```
+
+## Str (uncorrected)
+
+### Map NMF result sampleIDs onto BCRF_Str Seurat object 
+
+```{r}
+# Extract sample and cluster info from NMF results where k=6
+Str_sample_clusters_k6 <- Str_sample_clusters |> 
+  select(Sample, Cluster, Rank) |>
+  filter(Rank == 6)
+
+# Fix mismatch between sample names 
+Str_sample_clusters_k6$Sample_clean <- gsub("\\.", "-", Str_sample_clusters_k6$Sample)
+
+# Subset BCRF_Str by NMF samples only (remove sample w/ 0 counts)
+BCRF_Str <- subset(BCRF_Str, cells = Str_sample_clusters_k6$Sample_clean)
+
+extracted <- str_match(Str_sample_clusters_k6$Sample_clean, "set\\d+_\\d+_(\\d+)")[,2]
+Str_sample_clusters_k6$sample <- extracted
+
+# force both sides to the same type before matching -- this is the #1 source of silent NAs
+Str_sample_clusters_k6$sample <- as.character(Str_sample_clusters_k6$sample)
+BCRF_Str$sample <- as.character(BCRF_Str$sample)
+
+# map onto the Seurat object
+BCRF_Str$clusters_k6 <- Str_sample_clusters_k6$Cluster[
+  match(BCRF_Str$sample, Str_sample_clusters_k6$sample)
+]
+BCRF_Str$clusters_k6 <- factor(BCRF_Str$clusters_k6)
+
+# sanity check -- how many cells got NA (i.e. sample wasn't found in your NMF table)?
+table(BCRF_Str$clusters_k6, useNA = "ifany")
+
+# 1   2   3   4   5   6 
+# 75  95  86  33  39 120 
+# Matches silhouette plot cluster numbers 
+```
+
+### Plot on existing reductions 
+
+```{r}
+# Unintegrated reduction
+p1 <- DimPlot(BCRF_Str, reduction = "umap.unintegrated") +
+  ggtitle("Original Clusters (unintegrated)")
+p2 <- DimPlot(BCRF_Str, reduction = "umap.unintegrated", group.by = "clusters_k6") +
+  ggtitle("NMF Clusters (k=6)")
+
+ggsave("plots/NMF_reclustering/Str/k6/Str_unintegrated_UMAP_comparison_k6.png", p1 + p2, width = 12, height = 6, dpi = 300)
+
+# RPCA reduction
+p3 <- DimPlot(BCRF_Str, reduction = "umap.rpca") +
+  ggtitle("Original Clusters (RPCA)")
+p4 <- DimPlot(BCRF_Str, reduction = "umap.rpca", group.by = "clusters_k6") +
+  ggtitle("NMF Clusters (k=6)")
+
+ggsave("plots/NMF_reclustering/Str/k6/Str_RPCA_UMAP_comparison_k6.png", p3 + p4, width = 12, height = 6, dpi = 300)
+
+# RPCA dxs comparison 
+p5 <- DimPlot(BCRF_Str, reduction = "umap.rpca", group.by = "dxs") +
+  ggtitle("dxs (RPCA)") 
+
+ggsave("plots/NMF_reclustering/Str/k6/Str_RPCA_dxs_UMAP_comparison_k6.png", p5 + p4, width = 12, height = 6, dpi = 300)
+```
+
+## Str_corrected
+
+### Reorient matrices correctly
+
+```{r}
+# Extract k=6 specific NMF result
+Str_res_corrected_k6 <- Str_res_corrected$fit[["6"]]
+
+# Extract basis and coefficient matrices
+w_StrC_k6 <- basis(Str_res_corrected_k6)
+h_StrC_k6 <- coef(Str_res_corrected_k6)
+
+# Transpose coefficient matrix
+StrC_NMF_embeddings_k6 <- t(h_StrC_k6)
+```
+
+### Check that cell names line up
+
+```{r}
+# Edit column names 
+colnames(StrC_NMF_embeddings_k6) <- paste0("NMF_", seq_len(ncol(StrC_NMF_embeddings_k6)))
+
+# Put sample names as rownames of embeddings object 
+rownames(StrC_NMF_embeddings_k6) <- colnames(Str_vdata_corrected)  # whatever you fed into nmf()
+
+# Change "." to "-" in NMF embedding sample names 
+rownames(StrC_NMF_embeddings_k6) <- gsub("\\.", "-", rownames(StrC_NMF_embeddings_k6))
+
+# Subset BCRF_Str by NMF samples only 
+BCRF_Str <- subset(BCRF_Str, cells = rownames(StrC_NMF_embeddings_k6))
+
+# then re-check
+identical(rownames(StrC_NMF_embeddings_k6), colnames(BCRF_Str)) # TRUE 
+```
+
+### Create DimReducObject
+
+```{r}
+BCRF_Str[["nmf_k6"]] <- CreateDimReducObject(
+  embeddings = StrC_NMF_embeddings_k6,
+  loadings   = w_StrC_k6,                # optional but nice to keep (genes x k)
+  key        = "NMF_",                   # must end in underscore, must be unique
+  assay      = DefaultAssay(BCRF_Str)
+)
+```
+
+### Run/Generate UMAP on NMF reduction instead of PCA
+
+```{r}
+BCRF_Str <- RunUMAP(
+  BCRF_Str,
+  reduction = "nmf_k6",
+  dims = 1:ncol(StrC_NMF_embeddings_k6), # or a subset of factors if some are junk
+  reduction.name = "umap_nmf_k6_",
+  reduction.key = "umapnmf_k6_"
+)
+```
+
+```{r}
+# Visualizations 
+setwd("plots/NMF_reclustering/Str_corrected/k6")
+
+DimPlot(BCRF_Str, reduction = "umap_nmf_k6_", label = TRUE)
+ggsave("umap.nmf.k5.png", width = 8, height = 8)
+
+DimPlot(BCRF_Str, reduction = "umap_nmf_k6_", group.by = "protocol")
+ggsave("protocol.png", width = 8, height = 8)
+
+DimPlot(BCRF_Str, reduction = "umap_nmf_k6_", group.by = "dxs")
+ggsave("dxs.png", width = 8, height = 8)  
+
+DimPlot(BCRF_Str, reduction = "umap_nmf_k6_", group.by = "dx")
+ggsave("dx.png", width = 12, height = 8)
+
+n_patients <- length(unique(BCRF_Str$patient))
+DimPlot(BCRF_Str, reduction = "umap_nmf_k6_", group.by = "patient") +
+  ggtitle(paste("n patients = ", n_patients))
+ggsave("patient.png", width = 12, height = 8)  
+
+DimPlot(BCRF_Str, reduction = "umap_nmf_k6_", group.by = "sequence.batch.number")
+ggsave("sequence batch number.png", width = 12, height = 8)
+```
+
+### Map NMF result sampleIDs onto BCRF_Str Seurat object 
+
+```{r}
+# Extract sample and cluster info from NMF results where k=6 
+Str_sample_clusters_corrected_k6 <- Str_sample_clusters_corrected |> 
+  select(Sample, Cluster, Rank) |>
+  filter(Rank == 6)
+
+# Fix mismatch between sample names 
+Str_sample_clusters_corrected_k6$Sample_clean <- gsub("\\.", "-", Str_sample_clusters_corrected_k6$Sample)
+
+# Subset BCRF_Str by NMF samples only (remove sample w/ 0 counts)
+BCRF_Str <- subset(BCRF_Str, cells = Str_sample_clusters_corrected_k6$Sample_clean)
+
+extracted <- str_match(Str_sample_clusters_corrected_k6$Sample_clean, "set\\d+_\\d+_(\\d+)")[,2]
+Str_sample_clusters_corrected_k6$sample <- extracted
+
+# force both sides to the same type before matching -- this is the #1 source of silent NAs
+Str_sample_clusters_corrected_k6$sample <- as.character(Str_sample_clusters_corrected_k6$sample)
+BCRF_Str$sample <- as.character(BCRF_Str$sample)
+
+# map onto the Seurat object
+BCRF_Str$clusters_k6_corrected <- Str_sample_clusters_corrected_k6$Cluster[
+  match(BCRF_Str$sample, Str_sample_clusters_corrected_k6$sample)
+]
+BCRF_Str$clusters_k6_corrected <- factor(BCRF_Str$clusters_k6_corrected)
+
+# sanity check -- how many cells got NA (i.e. sample wasn't found in your NMF table)?
+table(BCRF_Str$clusters_k6_corrected, useNA = "ifany")
+
+#  1   2   3   4   5   6 
+# 90 109 105  55  64  25 
+# Matches silhouette plot cluster numbers 
+```
+
+### Plot on existing reductions 
+
+```{r}
+# Integrated reduction
+p1 <- DimPlot(BCRF_Str, reduction = "umap_nmf_k6_") +
+  ggtitle("Original Clusters (Integrated)")
+p2 <- DimPlot(BCRF_Str, reduction = "umap_nmf_k6_", group.by = "clusters_k6_corrected") +
+  ggtitle("NMF Clusters (k=6)")
+
+ggsave("plots/NMF_reclustering/Str_corrected/k6/Str_Integrated_UMAP_comparison_k6.png", p1 + p2, width = 12, height = 6, dpi = 300)
+
+# Integrated dxs comparison 
+p3 <- DimPlot(BCRF_Str, reduction = "umap_nmf_k6_", group.by = "dxs") +
+  ggtitle("dxs (Integrated)") 
+
+ggsave("plots/NMF_reclustering/Str_corrected/k6/Str_Integrated_dxs_UMAP_comparison_k6.png", p3 + p2, width = 12, height = 6, dpi = 300)
+```
+
+
+
+# Save RDS of NMF cluster metadata and reductions 
+
+```{r}
+# Save Ep object w/ k=5,6 metadata (and also reductions, for corrected)
+saveRDS(BCRF_Ep, "data/integrated_BCRF_Ep_inc_NMF.rds")
+
+# Save Str object w/ k=4,5,6 metadata (and also reductions, for corrected)
+saveRDS(BCRF_Str, "data/integrated_BCRF_Str_inc_NMF.rds")
+```
+
