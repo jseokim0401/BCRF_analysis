@@ -1,0 +1,64 @@
+---
+title: "07_CIBERSORTx"
+format: gfm
+---
+
+# 07_CIBERSORTx
+
+The goal of this script is to perform bulk RNA-Seq deconvolution via CIBERSORTx to analyze what fraction of each bulk sample is composed of what cell types. 
+
+## Set-up
+
+```{r}
+# Load libraries 
+library(Seurat)
+
+# Set global options 
+options(future.globals.maxSize = Inf)
+print(getOption("future.globals.maxSize"))
+options(Seurat.object.assay.version = "v5")
+
+# Load in data
+BCRF_Str <- readRDS("data/RE-DONE integrated BCRF v1_Str 3.rds")
+```
+
+## Construct input data 
+
+CIBERSORTx expects input counts data CPM or TPM, not raw counts, in the form of .tsv files. 
+
+```{r}
+# Extract raw counts data from Seurat object 
+Str_raw_counts <- GetAssayData(BCRF_Str, assay = "RNA", layer = "counts")
+
+# Convert to regular matrix (GetAssayData() sometimes returns sparse)
+Str_raw_counts <- as.matrix(Str_raw_counts)
+
+# Remove empty (zero counts) sample 
+# Check totals per sample
+sample_totals <- colSums(Str_raw_counts)
+sample_totals[sample_totals == 0]  # confirm which sample(s) are zero
+
+# Drop it
+Str_raw_counts <- Str_raw_counts[, sample_totals > 0]
+
+# Convert to CPM (counts per million)
+# Divide every column sample by total counts for each sample and convert to CPM 
+Str_cpm <- sweep(Str_raw_counts, 2, colSums(Str_raw_counts), FUN = "/") * 1e6 
+
+# Construct dataframe w/ gene names as first column 
+# CIBERSORTx requires first column name to be "GeneSymbol" 
+Str_cpm_df <- data.frame(
+  GeneSymbol = rownames(Str_cpm), 
+  Str_cpm,
+  check.names = FALSE 
+)
+
+# Save as .tsv file 
+write.table(Str_cpm_df,
+            "data/CIBERSORTx/Str_cibersortx_input.tsv",
+            sep       = "\t",
+            row.names = FALSE,
+            quote     = FALSE
+            )
+```
+
