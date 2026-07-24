@@ -435,7 +435,7 @@ table(BCRF_Ep$clusters_k5_corrected, useNA = "ifany")
 ### Plot on existing reductions 
 
 ```{r}
-# Integrated reduction 
+# NMF-Integrated reduction 
 p1 <- DimPlot(BCRF_Ep, reduction = "umap_nmf_k5_") +
   ggtitle("Original Clusters (Integrated)")
 p2 <- DimPlot(BCRF_Ep, reduction = "umap_nmf_k5_", group.by = "clusters_k5_corrected") +
@@ -443,11 +443,26 @@ p2 <- DimPlot(BCRF_Ep, reduction = "umap_nmf_k5_", group.by = "clusters_k5_corre
 
 ggsave("plots/NMF_reclustering/Ep_corrected/k5/Ep_integrated_UMAP_comparison_k5.png", p1 + p2, width = 12, height = 6, dpi = 300)
 
-# RPCA dxs comparison 
+# NMF-Integrated dxs comparison 
 p3 <- DimPlot(BCRF_Ep, reduction = "umap_nmf_k5_", group.by = "dxs") +
   ggtitle("dxs (Integrated)") 
 
 ggsave("plots/NMF_reclustering/Ep_corrected/k5/Ep_integrated_dxs_UMAP_comparison_k5.png", p3 + p2, width = 12, height = 6, dpi = 300)
+
+# RPCA reduction
+p4 <- DimPlot(BCRF_Ep, reduction = "umap.rpca") +
+  ggtitle("Original Clusters (RPCA)")
+p5 <- DimPlot(BCRF_Ep, reduction = "umap.rpca", group.by = "clusters_k5_corrected") +
+  ggtitle("NMF Clusters (k=5, corrected)")
+
+ggsave("plots/NMF_reclustering/Ep_corrected/k5/Ep_corrected_RPCA_UMAP_comparison_k5.png", p4 + p5, width = 12, height = 6, dpi = 300)
+
+# RPCA dxs comparison 
+p6 <- DimPlot(BCRF_Ep, reduction = "umap.rpca", group.by = "dxs") +
+  ggtitle("dxs (RPCA)") 
+
+ggsave("plots/NMF_reclustering/Ep_corrected/k5/Ep_corrected_RPCA_dxs_UMAP_comparison_k5.png", p6 + p5, width = 12, height = 6, dpi = 300)
+
 ```
 
 ## Str (uncorrected), k=5
