@@ -19,12 +19,45 @@ print(getOption("future.globals.maxSize"))
 options(Seurat.object.assay.version = "v5")
 
 # Load in data
-BCRF_Str <- readRDS("data/RE-DONE integrated BCRF v1_Str 3.rds")
+BCRF_Ep <- readRDS("../data/RE-DONE integrate BCRF v1_Ep 1.rds")
+BCRF_Str <- readRDS("../data/RE-DONE integrated BCRF v1_Str 3.rds")
 ```
 
 ## Construct input data 
 
 CIBERSORTx expects input counts data CPM or TPM, not raw counts, in the form of .tsv files. 
+
+### Ep
+
+```{r}
+# Extract raw counts data from Seurat object 
+Ep_raw_counts <- GetAssayData(BCRF_Ep, assay = "RNA", layer = "counts")
+
+# Convert to regular matrix (GetAssayData() sometimes returns sparse)
+Ep_raw_counts <- as.matrix(Ep_raw_counts)
+
+# Convert to CPM (counts per million)
+# Divide every column sample by total counts for each sample and convert to CPM 
+Ep_cpm <- sweep(Ep_raw_counts, 2, colSums(Ep_raw_counts), FUN = "/") * 1e6 
+
+# Construct dataframe w/ gene names as first column 
+# CIBERSORTx requires first column name to be "GeneSymbol" 
+Ep_cpm_df <- data.frame(
+  GeneSymbol = rownames(Ep_cpm), 
+  Ep_cpm,
+  check.names = FALSE 
+)
+
+# Save as .tsv file 
+write.table(Ep_cpm_df,
+            "../data/CIBERSORTx/Ep_cibersortx_input.tsv",
+            sep       = "\t",
+            row.names = FALSE,
+            quote     = FALSE
+            )
+```
+
+### Str
 
 ```{r}
 # Extract raw counts data from Seurat object 
@@ -60,5 +93,58 @@ write.table(Str_cpm_df,
             row.names = FALSE,
             quote     = FALSE
             )
+```
+
+## Parse output (results) data
+
+```{r}
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+# Load CIBERSORTx output (downloaded from the website)
+deconv_results <- read.table(
+  "CIBERSORTx_Results.txt",
+  header    = TRUE,
+  sep       = "\t",
+  row.names = 1,
+  check.names = FALSE
+)
+
+# Keep only the cell fraction columns (remove p-value, correlation, RMSE)
+fraction_cols <- setdiff(
+  colnames(deconv_results),
+  c("P-value", "Correlation", "RMSE")
+)
+fractions <- deconv_results[, fraction_cols]
+
+# Add condition metadata
+fractions$sample    <- rownames(fractions)
+fractions$condition <- metadata[rownames(fractions), "condition"]
+
+# Reshape for plotting
+fractions_long <- fractions |>
+  tidyr::pivot_longer(
+    cols      = all_of(fraction_cols),
+    names_to  = "cell_type",
+    values_to = "proportion"
+  )
+
+# Stacked bar chart of cell type proportions per sample
+ggplot(fractions_long,
+       aes(x = sample, y = proportion, fill = cell_type)) +
+  geom_col(width = 0.8) +
+  scale_fill_brewer(palette = "Set3", name = "Cell type") +
+  labs(
+    x     = NULL,
+    y     = "Estimated proportion",
+    title = "Cell type composition by sample (CIBERSORTx)"
+  ) +
+  theme_classic(base_size = 10) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
+    legend.text = element_text(size = 7)
+  ) +
+  facet_grid(. ~ condition, scales = "free_x", space = "free_x")
 ```
 
