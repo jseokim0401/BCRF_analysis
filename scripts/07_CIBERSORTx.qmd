@@ -23,6 +23,88 @@ BCRF_Ep <- readRDS("../data/RE-DONE integrate BCRF v1_Ep 1.rds")
 BCRF_Str <- readRDS("../data/RE-DONE integrated BCRF v1_Str 3.rds")
 ```
 
+## Construct signature matrix 
+
+```{r}
+# Load in data 
+counts <- Read10X("../data/CIBERSORTx/reference/Wu_data")
+meta <- read.csv("../data/CIBERSORTx/reference/Whole_miniatlas_meta.csv", row.names = 1)
+
+Wu_seurat <- CreateSeuratObject(counts = counts, meta.data = meta)
+saveRDS(Wu_seurat, "../data/CIBERSORTx/reference/Wu_seurat.rds")
+
+Wu_seurat <- readRDS("../data/CIBERSORTx/reference/Wu_seurat.rds")
+```
+
+The signature matrix should be constructed as a .tsv file where rows are genes and columns are individual cells, labeled by their cell type name (column header).
+
+```{r}
+# Pull raw counts and cell type labels 
+# raw counts - NOT normalized, CIBERSORTx does its own internal normalization
+counts <- GetAssayData(Wu_seurat, assay = "RNA", layer = "counts")
+counts <- as.matrix(counts)
+
+# pull cell type labels - adjust column name to whatever you found in the metadata
+celltypes <- Wu_seurat$celltype_major  # or celltype_minor, etc.
+```
+
+### Downsample cells per type 
+
+Account for unbalanced cell type group sizes by adjusting to a consistent number per cell type. 
+
+```{r}
+set.seed(67)
+max_cells_per_type <- 500  # adjust based on your smallest group size
+
+cells_to_keep <- unlist(lapply(unique(celltypes), function(ct) {
+  ct_cells <- names(celltypes)[celltypes == ct]
+  if (length(ct_cells) > max_cells_per_type) {
+    sample(ct_cells, max_cells_per_type)
+  } else {
+    ct_cells
+  }
+}))
+
+counts_sub <- counts[, cells_to_keep]
+celltypes_sub <- celltypes[cells_to_keep]
+```
+
+### Build the CIBERSORTx-format matrix (cell-type labels as column headers)
+
+```{r}
+# replace column names with cell type labels
+colnames(counts_sub) <- as.character(celltypes_sub)
+
+# add gene symbols as first column
+sig_matrix_df <- data.frame(GeneSymbol = rownames(counts_sub), counts_sub, check.names = FALSE)
+```
+
+### Clean up gene symbols 
+
+```{r}
+# remove duplicate gene symbols (keep first occurrence, or sum if you prefer)
+sig_matrix_df <- sig_matrix_df[!duplicated(sig_matrix_df$GeneSymbol), ]
+
+# drop genes with zero expression across all retained cells
+gene_sums <- rowSums(sig_matrix_df[, -1])
+sig_matrix_df <- sig_matrix_df[gene_sums > 0, ]
+
+# Sanity check
+table(colnames(sig_matrix_df)[-1]) # All celltypes only contain 750 
+```
+
+### Construct signature matrix file 
+
+```{r}
+write.table(
+  sig_matrix_df,
+  file = "../data/Wu2021_scRef_for_CIBERSORTx.txt",
+  sep = "\t",
+  quote = FALSE,
+  row.names = FALSE
+)
+```
+
 ## Construct input data 
 
 CIBERSORTx expects input counts data CPM or TPM, not raw counts, in the form of .tsv files. 
@@ -88,7 +170,7 @@ Str_cpm_df <- data.frame(
 
 # Save as .tsv file 
 write.table(Str_cpm_df,
-            "data/CIBERSORTx/Str_cibersortx_input.tsv",
+            "../data/CIBERSORTx/Str_cibersortx_input.tsv",
             sep       = "\t",
             row.names = FALSE,
             quote     = FALSE
