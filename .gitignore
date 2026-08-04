@@ -2,7 +2,10 @@
 .Rhistory
 .RData
 .Ruserdata
-data/*
-!data/.gitkeep
-data/DESeq2/
 
+# Ignore files that contain raw data
+data/raw_data/
+data/CIBERSORTx/reference/
+data/CIBERSORTx/input/
+data/DESeq2/
+data/DESeq2_InferCNV_Subclusters/

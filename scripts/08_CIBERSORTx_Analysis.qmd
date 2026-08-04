@@ -1,0 +1,225 @@
+---
+title: "08_CIBERSORTx_Analysis"
+format: gfm
+---
+
+# 08_CIBERSORTx_Analysis
+
+The goal of this script will be to conduct statistical tests on CIBERSORTx results to compare whether each cell type's fraction differs across diagnostic groups, focusing on differences between "NL", "BBD", and "DCIS" epithelial samples.
+
+The general workflow will be to perform omnibus testing with Kruskal-Wallis screen -\> FDR -\> pairwise Wilcoxon -\> FDR.
+
+# Set-up
+
+```{r}
+# Load libraries 
+library(Seurat)  
+library(tidyr)
+library(dplyr)
+library(purrr)
+library(rstatix)
+library(ggplot2)
+
+# Set global options 
+options(future.globals.maxSize = Inf)
+print(getOption("future.globals.maxSize"))
+options(Seurat.object.assay.version = "v5")
+```
+
+# Read in CIBERSORTx results and metadata
+
+```{r}
+# Load-in raw CIBERSORTx results table
+ciber_raw <- read.delim(
+  "data/CIBERSORTx/CIBERSORTx_Ep_Bassez_results.txt", 
+  sep = "\t",
+  header = TRUE,
+  check.names = FALSE          # keep cell type names exactly as CIBERSORTx wrote them
+)
+
+# Drop non-cell-type summary columns
+cols_to_drop <- c("P-value", "Correlation", "RMSE")
+
+# Identify which columns are actual cell type fraction columns:
+# everything except the sample ID column ("Mixture") and the QC columns above.
+cell_type_cols <- setdiff(colnames(ciber_raw), c("Mixture", cols_to_drop))
+```
+
+```{r}
+# Build metadata from samples in inferCNV-defined dxs subclusters 
+NL_samples   <- c("sample1", "sample2", "sample3")    
+BBD_samples  <- c("sample4", "sample5")               
+DCIS_samples <- c("sample6", "sample7", "sample8")   
+
+# Build lookup table: one row per sample, with its diagnosis group label.
+meta <- rbind(
+  data.frame(sample_id = NL_samples,   dxs = "NL"),
+  data.frame(sample_id = BBD_samples,  dxs = "BBD"),
+  data.frame(sample_id = DCIS_samples, dxs = "DCIS")
+)
+
+# Sanity check: make sure no sample ID appears in more than one group list
+# (would indicate a copy-paste error from your mentor's list or your own transcription).
+dup_check <- meta %>% count(sample_id) %>% filter(n > 1)
+if (nrow(dup_check) > 0) {
+  warning(paste(
+    "These sample IDs appear in more than one group list:",
+    paste(dup_check$sample_id, collapse = ", ")
+  ))
+}
+```
+
+# Reshape to long format and attach group labels
+
+```{r}
+df_long <- ciber_raw |>
+  select(Mixture, all_of(cell_type_cols)) |>      # keep sample ID + fraction columns only
+  pivot_longer(
+    cols = all_of(cell_type_cols),                 # columns to stack into long format
+    names_to = "cell_type",                        # new column holding cell type names
+    values_to = "fraction"                         # new column holding the fraction values
+  ) |>
+  left_join(meta, by = c("Mixture" = "sample_id")) # attach diagnosis_group per sample
+
+# Sanity check: make sure every sample matched to a diagnosis group.
+# If this prints any rows, those samples had no metadata match --
+# likely a sample ID mismatch (e.g., hyphens vs dots from make.names()).
+missing_group <- df_long %>% filter(is.na(dxs))
+if (nrow(missing_group) > 0) {
+  warning(paste(
+    "Some samples have no matching diagnosis_group -- check sample ID formatting.",
+    "Affected samples:", paste(unique(missing_group$Mixture), collapse = ", ")
+  ))
+}
+
+# Make dxs a factor with an explicit level order for plot facet labeling and how pairwise comparisons are labeled
+df_long <- df_long %>%
+  mutate(dxs = factor(dxs, levels = c("NL", "BBD", "DCIS")))
+
+```
+
+# Kruskal-Wallis screen across cell types
+
+Kruskal-Wallis is a omnibus/global test that will answer: for EACH cell type, does fraction differ across ANY of the groups? This is not the same as defining which specific pairs of groups differ.
+
+```{r}
+# Get the list of unique cell types to loop over.
+cell_types <- unique(df_long$cell_type)
+
+# map_dfr runs the function over each cell type and row-binds the results
+# into a single data frame (dfr = "data frame, row-bind").
+kw_results <- map_dfr(cell_types, function(ct) {
+
+  # Subset to just this cell type's rows across all samples.
+  sub_df <- df_long %>% filter(cell_type == ct)
+
+  # Run Kruskal-Wallis: fraction ~ diagnosis_group.
+  # This tests whether the rank distributions differ across the 3 dxs groups.
+  kw_test <- kruskal.test(fraction ~ dxs, data = sub_df)
+
+  # Return a one-row summary for this cell type.
+  data.frame(
+    cell_type = ct,
+    kw_statistic = kw_test$statistic,   # the H statistic
+    kw_pvalue = kw_test$p.value,        # raw (unadjusted) p-value
+    n_samples = nrow(sub_df)            # sanity-check sample count
+  )
+})
+```
+
+## FDR (Benjamini-Hochberg) correction across all cell types tested
+
+```{r}
+# Pull all cell types tested in this KW screening step
+kw_results <- kw_results %>%
+  mutate(kw_padj = p.adjust(kw_pvalue, method = "BH")) %>%
+  arrange(kw_padj)  
+
+print(kw_results)
+
+# Define which cell types move on to pairwise follow-up testing (p<0.05)
+sig_cell_types <- kw_results %>%
+  filter(kw_padj < 0.05) %>%
+  pull(cell_type)
+
+message(paste("Cell types passing KW FDR screen:", paste(sig_cell_types, collapse = ", ")))
+```
+
+# Pairwise Wilcoxon rank-sum, only for KW-significant types
+
+For cell types where KW found SOME difference, Wilcoxon figures out WHICH specific group pairs differ i.e. NL vs Invasive but not NL vs DCIS.
+
+- rstatix::wilcox_effsize() provides the rank-biserial correlation, which informs the size of the difference between two dxs expression of the same cell type
+  - ranges from -1 to 1
+  - \|r\| \~0.1 small, \~0.3 medium, \~0.5 large differences (Cohen-style rough guide)
+  - r \> 0: group1 has larger fractions than group2
+  - r \< 0: group2 has larger fractions than group1
+- pairwise.wilcox.test() provides significance of these differences
+  - FDR automatically applied
+
+```{r}
+# Computes effect sizes for a Wilcoxon test:
+wilcox_effect_size <- function(x, y) {
+  
+  # Create tidy frame (req by rstatix) of fraction values 
+  df <- data.frame(
+    fraction = c(x, y),
+    group = factor(c(rep("group1", length(x)),
+                     rep("group2", length(y))))
+  )
+  
+  rstatix::wilcox_effsize(
+    df,
+    value ~ group
+  )$effsize
+}
+
+# Loop over only the significant cell types from Round 1.
+pairwise_results <- map_dfr(sig_cell_types, function(ct) {
+
+  sub_df <- df_long %>% filter(cell_type == ct)
+
+  # pairwise.wilcox.test runs Wilcoxon rank-sum for every pair of groups
+  # and automatically applies FDR correction WITHIN this cell type's
+  # family of pairwise comparisons (i.e., not pooled with other cell types).
+  pw_test <- pairwise.wilcox.test(
+    x = sub_df$fraction,
+    g = sub_df$dxs,
+    p.adjust.method = "BH",   # FDR correction within this cell type's pairwise family
+    exact = FALSE              # avoid warnings from ties in the fraction data
+  )
+
+  # reshape results matrix into tidy long data frame 
+  pmat <- pw_test$p.value
+  pw_long <- as.data.frame(as.table(pmat)) %>%
+    rename(group1 = Var1, group2 = Var2, p_adj = Freq) %>%
+    filter(!is.na(p_adj))   # matrix has NAs in the unused upper triangle
+
+  # Add cell type label and effect size for each pair.
+  pw_long <- pw_long %>%
+    mutate(cell_type = ct) %>%
+    rowwise() %>%
+    mutate(
+      effect_size_r = wilcox_effect_size(
+        sub_df$fraction[sub_df$dxs == group1],
+        sub_df$fraction[sub_df$dxs == group2]
+      )
+    ) %>%
+    ungroup()
+
+  pw_long
+})
+
+# Reorder columns for readability.
+pairwise_results <- pairwise_results %>%
+  select(cell_type, group1, group2, p_adj, effect_size_r)
+
+print(pairwise_results)
+```
+
+# Save results for downstream
+
+```{r}
+write.csv(kw_results, "data/CIBERSORTx_Analysis/kw_screen_results.csv", row.names = FALSE)
+write.csv(pairwise_results, "data/CIBERSORTx_Analysis/pairwise_wilcoxon_results.csv", row.names = FALSE)
+```
