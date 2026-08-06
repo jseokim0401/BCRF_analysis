@@ -319,7 +319,7 @@ BBD_s1_s3_s5_gsea_res_BP_df <- na.omit(read.csv("data/GSEA_InferCNV_Subclusters/
 
 ```{r}
 # Significant # of pathways 
-nrow(BBD_s1_s3_s5_gsea_res_BP_df |> filter(p.adjust < 0.05)) # 320
+nrow(BBD_s1_s3_s5_gsea_res_BP_df |> filter(p.adjust < 0.05)) # 314
 ```
 
 ```{r}
@@ -371,7 +371,7 @@ BBD_s1_s3_s5_dotplot_BP <- dotplot(BBD_s1_s3_s5_gsea_res_BP, showCategory = 15) 
   theme(axis.text.y = element_text(size = 9, family = "Arial"))
 
 ggsave("BBD_s1_s3_s5_dotplot_BP.png", BBD_s1_s3_s5_dotplot_BP, path = "plots/GSEA_InferCNV_Subclusters",
-       width = 6, height = 8, dpi = 300)
+       width = 7, height = 8, dpi = 300)
 ```
 
 ## Running GSEA (Hallmark)
@@ -438,7 +438,7 @@ BBD_s1_s3_s5_gsea_res_HM_df <- read.csv("data/GSEA_InferCNV_Subclusters/BBD_s1_s
 
 ```{r}
 # Significant # of pathways 
-nrow(BBD_s1_s3_s5_gsea_res_HM_df |> filter(p.adjust < 0.1)) #21
+nrow(BBD_s1_s3_s5_gsea_res_HM_df |> filter(p.adjust < 0.1)) #20
 ```
 
 ```{r}
@@ -475,6 +475,6 @@ BBD_s1_s3_s5_dotplot_HM <- dotplot(BBD_s1_s3_s5_gsea_res_HM, showCategory = 10) 
   theme(axis.text.y = element_text(size = 9, family = "Arial"))
 
 ggsave("BBD_s1_s3_s5_dotplot_HM.png", BBD_s1_s3_s5_dotplot_HM, path = "plots/GSEA_InferCNV_Subclusters",
-       width = 6, height = 7, dpi = 300)
+       width = 7, height = 7, dpi = 300)
 ```
 

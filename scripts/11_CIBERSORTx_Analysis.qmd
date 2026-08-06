@@ -7,9 +7,11 @@ format: gfm
 
 The goal of this script will be to conduct statistical tests on CIBERSORTx results to compare whether each cell type's fraction differs across diagnostic groups, focusing on differences between "NL", "BBD", and "DCIS" epithelial samples.
 
-The first comparison will be between BBD_s1 (normal-like) v. BBD_s2 (high CNVs) from subclusters defined by inferCNV. 
+Comparisons: 
+- BBD_s1 (normal-like) v. BBD_s2 (high CNVs)
+- BBD_s1 (normal-like) v. BBD_s3_s5 (low CNVs, more normal-like) 
 
-The general workflow will be to perform omnibus testing with Kruskal-Wallis screen -\> FDR -\> pairwise Wilcoxon -\> FDR.
+The general workflow will be to perform omnibus testing with Kruskal-Wallis screen (if 2+ groups) -\> FDR -\> pairwise Wilcoxon -\> FDR.
 
 # Set-up
 

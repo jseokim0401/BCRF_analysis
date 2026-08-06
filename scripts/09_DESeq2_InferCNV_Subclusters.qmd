@@ -277,7 +277,7 @@ BBD_s1_s3_s5_coldata <- data.frame(
     ifelse(BBD_s1_s3_s5_sub_BCRF@meta.data$inferCNV_subcluster %in% c("BBD_s3", "BBD_s5"),
            "BBD_s3_s5",
            as.character(BBD_s1_s3_s5_sub_BCRF@meta.data$inferCNV_subcluster)),
-    levels = c("BBD_s1", "BBD_s3_s5")
+    levels = c("BBD_s3_s5", "BBD_s1")
   ),
   row.names = colnames(BBD_s1_s3_s5_sub_BCRF)
 )
@@ -320,7 +320,7 @@ group_stats <- counts_long %>%
 group_stats
 
 before_filter_plot <- ggplot(counts_long, aes(x = raw_count, fill = group)) +
-  geom_histogram(binwidth = 1, position = "identity", alpha = 0.6) +
+  geom_histogram(binwidth = 1, position = "identity") +
   coord_cartesian(xlim = c(0, 100)) +
   labs(
     title = "Distribution of Raw Counts Before Filtering",
@@ -331,12 +331,12 @@ before_filter_plot <- ggplot(counts_long, aes(x = raw_count, fill = group)) +
 ```
 
 ```{r}
-# Filter genes: keep genes with ≥10 counts
-keep_genes <- rowSums(counts(BBD_s1_s3_s5_dds)) >= 10
+# Filter genes: keep genes with ≥5 counts
+keep_genes <- rowSums(counts(BBD_s1_s3_s5_dds)) >= 5
 BBD_s1_s3_s5_dds <- BBD_s1_s3_s5_dds[keep_genes, ]
 
 # Confirm how many genes survived
-nrow(BBD_s1_s3_s5_dds) # 34138
+nrow(BBD_s1_s3_s5_dds) # 37329
 ```
 
 ```{r}
@@ -362,7 +362,7 @@ group_stats_filtered <- filtered_counts_long %>%
 group_stats_filtered
 
 after_filter_plot <- ggplot(filtered_counts_long, aes(x = raw_count, fill = group)) +
-  geom_histogram(binwidth = 1, position = "identity", alpha = 0.6) +
+  geom_histogram(binwidth = 1, position = "identity") +
   coord_cartesian(xlim = c(0, 100)) +
   labs(
     title = "Distribution of Raw Counts After Filtering",
@@ -420,7 +420,7 @@ BBD_s1_s3_s5_dds <- readRDS("data/DESeq2_InferCNV_Subclusters/BBD_s1_s3_s5_dds_t
 BBD_s1_s3_s5_dds <- DESeq(BBD_s1_s3_s5_dds, parallel = TRUE)
 
 # Save DESeq results 
-BBD_s1_s3_s5_dds_res <- results(BBD_s1_s3_s5_dds, contrast = c("inferCNV_subcluster", "BBD_s3_s5", "BBD_s1"))
+BBD_s1_s3_s5_dds_res <- results(BBD_s1_s3_s5_dds, contrast = c("inferCNV_subcluster", "BBD_s1", "BBD_s3_s5"))
 saveRDS(BBD_s1_s3_s5_dds_res, "data/DESeq2_InferCNV_Subclusters/BBD_s1_s3_s5_res.rds")
 
 # Convert results to dataframe
