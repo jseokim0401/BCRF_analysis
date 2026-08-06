@@ -220,6 +220,13 @@ ggsave("BBD_s1_s2_dotplot_HM.png", BBD_s1_s2_dotplot_HM, path = "plots/GSEA_Infe
 ```{r}
 # Load in data 
 BBD_s1_s3_s5 <- read.csv("data/DESeq2_InferCNV_Subclusters/BBD_s1_s3_s5_res.csv", row.names = 1)
+
+# Check for NAs before ranking (DESeq2 often flags low-count genes with NA pvalue)
+sum(is.na(BBD_s1_s3_s5$pvalue))          # 7176
+sum(is.na(BBD_s1_s3_s5$log2FoldChange))  # 7176
+
+# Drop rows with NA pvalue or log2FoldChange - can't rank these
+BBD_s1_s3_s5 <- BBD_s1_s3_s5[!is.na(BBD_s1_s3_s5$pvalue) & !is.na(BBD_s1_s3_s5$log2FoldChange), ]
 ```
 
 ```{r}
@@ -242,14 +249,31 @@ nrow(BBD_s1_s3_s5_genes_mapped) # Check how many genes were mapped successfully
 length(BBD_s1_s3_s5_rankings)   # 43668 v. 28479
 ```
 
-```{r}
-# Create named vector w/ Entrez IDs as names and corresponding signed p values 
-BBD_s1_s3_s5_rankings_mapped <- BBD_s1_s3_s5_rankings[BBD_s1_s3_s5_genes_mapped$SYMBOL]
-names(BBD_s1_s3_s5_rankings_mapped) <- BBD_s1_s3_s5_genes_mapped$ENTREZID
+Converting produces warning: 'select()' returned 1:many mapping between keys and columns because some single gene symbols map to multiple EntrezIDs (or vice versa). 
 
-# Check all genes mapped correctly
-length(BBD_s1_s3_s5_rankings_mapped) == nrow(BBD_s1_s3_s5_genes_mapped)
-head(BBD_s1_s3_s5_rankings_mapped)
+```{r}
+# Dedupe: some SYMBOLs map to multiple ENTREZIDs (1:many warning) - keep first hit
+BBD_s1_s3_s5_genes_mapped <- BBD_s1_s3_s5_genes_mapped[!duplicated(BBD_s1_s3_s5_genes_mapped$SYMBOL), ]
+
+# Merge Entrez IDs back onto ranked vector
+BBD_s1_s3_s5_rankings_df <- data.frame(
+  SYMBOL = names(BBD_s1_s3_s5_rankings),
+  rank = BBD_s1_s3_s5_rankings
+)
+BBD_s1_s3_s5_rankings_df <- merge(BBD_s1_s3_s5_rankings_df, BBD_s1_s3_s5_genes_mapped, by = "SYMBOL")
+
+# Dedupe on ENTREZID too (in case multiple SYMBOLs map to same ID) - keep the one with larger |rank|
+BBD_s1_s3_s5_rankings_df <- BBD_s1_s3_s5_rankings_df[order(-abs(BBD_s1_s3_s5_rankings_df$rank)), ]
+BBD_s1_s3_s5_rankings_df <- BBD_s1_s3_s5_rankings_df[!duplicated(BBD_s1_s3_s5_rankings_df$ENTREZID), ]
+
+# Rebuild named, sorted vector using ENTREZID
+BBD_s1_s3_s5_rankings_entrez <- BBD_s1_s3_s5_rankings_df$rank
+names(BBD_s1_s3_s5_rankings_entrez) <- BBD_s1_s3_s5_rankings_df$ENTREZID
+BBD_s1_s3_s5_rankings_entrez <- sort(BBD_s1_s3_s5_rankings_entrez, decreasing = TRUE)
+
+# Sanity check: no NAs, no duplicate names, strictly decreasing
+sum(is.na(BBD_s1_s3_s5_rankings_entrez))             # 0
+sum(duplicated(names(BBD_s1_s3_s5_rankings_entrez))) # 0
 ```
 
 ## Running gseGO (BP) 
@@ -259,7 +283,7 @@ set.seed(67)
 
 # Run gseGO
 BBD_s1_s3_s5_gsea_res_BP <- clusterProfiler::gseGO(
-  geneList = BBD_s1_s3_s5_rankings_mapped, 
+  geneList = BBD_s1_s3_s5_rankings_entrez, 
   OrgDb = org.Hs.eg.db, 
   ont = "BP", 
   minGSSize = 5, 
@@ -347,7 +371,7 @@ BBD_s1_s3_s5_dotplot_BP <- dotplot(BBD_s1_s3_s5_gsea_res_BP, showCategory = 15) 
   theme(axis.text.y = element_text(size = 9, family = "Arial"))
 
 ggsave("BBD_s1_s3_s5_dotplot_BP.png", BBD_s1_s3_s5_dotplot_BP, path = "plots/GSEA_InferCNV_Subclusters",
-       width = 6, height = 7, dpi = 300)
+       width = 6, height = 8, dpi = 300)
 ```
 
 ## Running GSEA (Hallmark)
@@ -369,7 +393,7 @@ set.seed(67)
 
 # Run GSEA
 BBD_s1_s3_s5_gsea_res_HM <- clusterProfiler::GSEA(
-  geneList = BBD_s1_s3_s5_rankings_mapped, 
+  geneList = BBD_s1_s3_s5_rankings_entrez, 
   TERM2GENE = hallmark_sets, 
   minGSSize = 15, 
   maxGSSize = 500, 
@@ -453,3 +477,4 @@ BBD_s1_s3_s5_dotplot_HM <- dotplot(BBD_s1_s3_s5_gsea_res_HM, showCategory = 10) 
 ggsave("BBD_s1_s3_s5_dotplot_HM.png", BBD_s1_s3_s5_dotplot_HM, path = "plots/GSEA_InferCNV_Subclusters",
        width = 6, height = 7, dpi = 300)
 ```
+
