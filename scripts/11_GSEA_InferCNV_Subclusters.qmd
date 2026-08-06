@@ -1,0 +1,455 @@
+---
+title: "10_GSEA_InferCNV_Subclusters"
+format: gfm
+---
+
+# 10_GSEA_InferCNV_Subclusters
+
+The goal of this script will be to run gene set enrichment analysis on DESeq2 results for several comparisons in the BCRF dataset subclusters defined by inferCNV including:
+
+- BBD_s1: normal-like v. BBD_s2: high-CNVs (1 and 16)
+  - outliers BCRF_4-10_15659 and 1583 removed from BBD_s2
+- BBD_s1: normal-like v. BBD_s3 & BBD_s5: low-CNVs, more normal-like  
+  - outliers BCRF4_10_14894 and 15687 removed from BBD_s3
+
+# Load libraries 
+
+```{r}
+# Load libraries
+library(readr)
+library(clusterProfiler)
+library(msigdbr)
+library(org.Hs.eg.db)
+library(enrichplot)
+library(ggplot2)
+library(tidyverse)
+library(ggplotify)
+```
+
+# BBD_s1 v. BBD_s2
+
+## Set up
+```{r}
+# Load in data 
+BBD_s1_s2 <- read.csv("data/DESeq2_InferCNV_Subclusters/BBD_s1_s2_res.csv", row.names = 1)
+```
+
+```{r}
+# Prepare ranked list of genes
+# Use signed p value as ranking: sign(df$log2fc)*(-log10(df$pval))) to account for genes w/ large FC but are non-significant
+BBD_s1_s2_rankings <- sign(BBD_s1_s2$log2FoldChange)*(-log10(BBD_s1_s2$pvalue))
+names(BBD_s1_s2_rankings) <- BBD_s1_s2$Gene # genes as names
+
+# Sort by decreasing signed p values 
+BBD_s1_s2_rankings <- sort(BBD_s1_s2_rankings, decreasing = TRUE)
+
+# Convert from SYMBOL to Entrez nomenclature 
+BBD_s1_s2_genes_mapped <- bitr(
+  names(BBD_s1_s2_rankings),
+  fromType = "SYMBOL", 
+  toType = c("ENTREZID"),
+  OrgDb = org.Hs.eg.db)
+
+nrow(BBD_s1_s2_genes_mapped) # Check how many genes were mapped successfully
+length(BBD_s1_s2_rankings)   # 13145 v. 14448
+```
+
+```{r}
+# Create named vector w/ Entrez IDs as names and corresponding signed p values 
+BBD_s1_s2_rankings_mapped <- BBD_s1_s2_rankings[BBD_s1_s2_genes_mapped$SYMBOL]
+names(BBD_s1_s2_rankings_mapped) <- BBD_s1_s2_genes_mapped$ENTREZID
+
+# Check all genes mapped correctly
+length(BBD_s1_s2_rankings_mapped) == nrow(BBD_s1_s2_genes_mapped)
+head(BBD_s1_s2_rankings_mapped)
+```
+
+## Running gseGO (BP) 
+
+```{r}
+set.seed(67) 
+
+# Run gseGO
+BBD_s1_s2_gsea_res_BP <- clusterProfiler::gseGO(
+  geneList = BBD_s1_s2_rankings_mapped, 
+  OrgDb = org.Hs.eg.db, 
+  ont = "BP", 
+  minGSSize = 5, 
+  maxGSSize = 500, 
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  nPermSimple = 50000, # Increased from 10000
+  scoreType = "std",
+  seed = TRUE 
+)
+
+# Convert Entrez IDs to gene symbols for readability
+BBD_s1_s2_gsea_BP_readable <- clusterProfiler::setReadable(
+  BBD_s1_s2_gsea_res_BP,
+  OrgDb = org.Hs.eg.db,
+  keyType = "ENTREZID"
+  )
+
+saveRDS(BBD_s1_s2_gsea_BP_readable, "data/GSEA_InferCNV_Subclusters/BBD_s1_s2_gsea_res_BP.rds")
+
+# Convert gseaResult object into dataframe
+BBD_s1_s2_gsea_res_BP_df <- as.data.frame(BBD_s1_s2_gsea_BP_readable)
+write_csv(BBD_s1_s2_gsea_res_BP_df, "data/GSEA_InferCNV_Subclusters/BBD_s1_s2_gsea_res_BP.csv")
+```
+
+## Visualization (BP)
+
+```{r}
+# Load results 
+BBD_s1_s2_gsea_res_BP <- readRDS("data/GSEA_InferCNV_Subclusters/BBD_s1_s2_gsea_res_BP.rds")
+BBD_s1_s2_gsea_res_BP_df <- na.omit(read.csv("data/GSEA_InferCNV_Subclusters/BBD_s1_s2_gsea_res_BP.csv"))
+```
+
+```{r}
+# Significant # of pathways 
+nrow(BBD_s1_s2_gsea_res_BP_df |> filter(p.adjust < 0.05)) # 0
+```
+
+## Running GSEA (Hallmark)
+
+We'll use the Hallmark gene set from Molecular Signatures Database (MSigDB) for our PEA.
+
+```{r}
+# Hallmark gene set from msigdbr_collections()
+hallmark_sets <- msigdbr(species = 'Homo sapiens', collection = 'H')
+
+# Convert to named list format required by clusterprofiler: the first column should have pathway names
+# the second column should have genes in Entrez ID format 
+hallmark_sets <- hallmark_sets |>
+  dplyr::select(gs_name, ncbi_gene)
+```
+
+```{r}
+set.seed(67)
+
+# Run GSEA
+BBD_s1_s2_gsea_res_HM <- clusterProfiler::GSEA(
+  geneList = BBD_s1_s2_rankings_mapped, 
+  TERM2GENE = hallmark_sets, 
+  minGSSize = 15, 
+  maxGSSize = 500, 
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  nPermSimple = 50000, # Increase this value as need
+  scoreType = "std",
+  seed = TRUE
+)
+
+# Convert Entrez IDs to gene symbols for readability
+BBD_s1_s2_gsea_HM_readable <- clusterProfiler::setReadable(
+  BBD_s1_s2_gsea_res_HM,
+  OrgDb = org.Hs.eg.db,
+  keyType = "ENTREZID"
+  )
+
+# Clean up pathway titles for readability 
+BBD_s1_s2_gsea_HM_readable@result <- BBD_s1_s2_gsea_HM_readable@result |>
+  mutate(
+    Description = Description |>
+      str_replace_all("HALLMARK_", " ") |> # Delete HALLMARK_
+      str_replace_all("_", " ") |>         # Delete underscores in pathway titles
+      str_to_title(),                      # Make pathways title case instead of caps
+      .before = 1                          # Put new Description column at front
+  )
+
+saveRDS(BBD_s1_s2_gsea_HM_readable, "data/GSEA_InferCNV_Subclusters/BBD_s1_s2_gsea_res_HM.rds")
+
+# Convert gseaResult object into dataframe
+BBD_s1_s2_gsea_res_HM_df <- as.data.frame(BBD_s1_s2_gsea_HM_readable)
+write_csv(BBD_s1_s2_gsea_res_HM_df, "data/GSEA_InferCNV_Subclusters/BBD_s1_s2_gsea_res_HM.csv")
+```
+
+## Visualization (HM) 
+
+```{r}
+# Load results 
+BBD_s1_s2_gsea_res_HM <- readRDS("data/GSEA_InferCNV_Subclusters/BBD_s1_s2_gsea_res_HM.rds")
+BBD_s1_s2_gsea_res_HM_df <- read.csv("data/GSEA_InferCNV_Subclusters/BBD_s1_s2_gsea_res_HM.csv")
+```
+
+```{r}
+# Significant # of pathways 
+nrow(BBD_s1_s2_gsea_res_HM_df |> filter(p.adjust < 0.1)) # 8
+```
+
+```{r}
+# Generate barplot
+BBD_s1_s2_barplot_HM <- BBD_s1_s2_gsea_res_HM_df |>
+  filter(p.adjust < 0.1) |>
+  arrange(desc(NES)) |>
+  ggplot(aes(x = NES, y = reorder(Description, NES), fill = p.adjust)) + 
+  geom_col() + 
+  scale_fill_gradient(low = "red", high = "blue") +
+  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Hallmark Pathways Enriched\nin BBD_s2 Over BBD_s1") +
+  theme_bw() 
+  
+ggsave("BBD_s1_s2_barplot_HM.png", BBD_s1_s2_barplot_HM, path = "plots/GSEA_InferCNV_Subclusters",
+       width = 9, height = 6, dpi = 300)
+```
+
+```{r}
+# Cnetplot
+BBD_s1_s2_cnetplot_HM <- enrichplot::cnetplot(
+  BBD_s1_s2_gsea_res_HM,
+  categorySizeBy = ~NES, # or "pvalue", "p.adjust"
+  showCategory = 5
+  ) 
+
+ggsave("BBD_s1_s2_cnetplot_HM.png", BBD_s1_s2_cnetplot_HM, path = "plots/GSEA_InferCNV_Subclusters",
+       width = 12, height = 8, dpi = 300)
+```
+
+```{r}
+# Dotplot
+BBD_s1_s2_dotplot_HM <- dotplot(BBD_s1_s2_gsea_res_HM, showCategory = 10) +
+  ggtitle("Top 10 Hallmark Pathways from GSEA\nin BBD_s2 Over BBD_s1") +
+  theme(axis.text.y = element_text(size = 9, family = "Arial"))
+
+ggsave("BBD_s1_s2_dotplot_HM.png", BBD_s1_s2_dotplot_HM, path = "plots/GSEA_InferCNV_Subclusters",
+       width = 6, height = 7, dpi = 300)
+```
+
+# BBD_s1 v. BBD_s3_s5
+
+## Set up
+```{r}
+# Load in data 
+BBD_s1_s3_s5 <- read.csv("data/DESeq2_InferCNV_Subclusters/BBD_s1_s3_s5_res.csv", row.names = 1)
+```
+
+```{r}
+# Prepare ranked list of genes
+# Use signed p value as ranking: sign(df$log2fc)*(-log10(df$pval))) to account for genes w/ large FC but are non-significant
+BBD_s1_s3_s5_rankings <- sign(BBD_s1_s3_s5$log2FoldChange)*(-log10(BBD_s1_s3_s5$pvalue))
+names(BBD_s1_s3_s5_rankings) <- BBD_s1_s3_s5$Gene # genes as names
+
+# Sort by decreasing signed p values 
+BBD_s1_s3_s5_rankings <- sort(BBD_s1_s3_s5_rankings, decreasing = TRUE)
+
+# Convert from SYMBOL to Entrez nomenclature 
+BBD_s1_s3_s5_genes_mapped <- bitr(
+  names(BBD_s1_s3_s5_rankings),
+  fromType = "SYMBOL", 
+  toType = c("ENTREZID"),
+  OrgDb = org.Hs.eg.db)
+
+nrow(BBD_s1_s3_s5_genes_mapped) # Check how many genes were mapped successfully
+length(BBD_s1_s3_s5_rankings)   # 43668 v. 28479
+```
+
+```{r}
+# Create named vector w/ Entrez IDs as names and corresponding signed p values 
+BBD_s1_s3_s5_rankings_mapped <- BBD_s1_s3_s5_rankings[BBD_s1_s3_s5_genes_mapped$SYMBOL]
+names(BBD_s1_s3_s5_rankings_mapped) <- BBD_s1_s3_s5_genes_mapped$ENTREZID
+
+# Check all genes mapped correctly
+length(BBD_s1_s3_s5_rankings_mapped) == nrow(BBD_s1_s3_s5_genes_mapped)
+head(BBD_s1_s3_s5_rankings_mapped)
+```
+
+## Running gseGO (BP) 
+
+```{r}
+set.seed(67) 
+
+# Run gseGO
+BBD_s1_s3_s5_gsea_res_BP <- clusterProfiler::gseGO(
+  geneList = BBD_s1_s3_s5_rankings_mapped, 
+  OrgDb = org.Hs.eg.db, 
+  ont = "BP", 
+  minGSSize = 5, 
+  maxGSSize = 500, 
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  nPermSimple = 50000, # Increased from 10000
+  scoreType = "std",
+  seed = TRUE 
+)
+
+# Convert Entrez IDs to gene symbols for readability
+BBD_s1_s3_s5_gsea_BP_readable <- clusterProfiler::setReadable(
+  BBD_s1_s3_s5_gsea_res_BP,
+  OrgDb = org.Hs.eg.db,
+  keyType = "ENTREZID"
+  )
+
+saveRDS(BBD_s1_s3_s5_gsea_BP_readable, "data/GSEA_InferCNV_Subclusters/BBD_s1_s3_s5_gsea_res_BP.rds")
+
+# Convert gseaResult object into dataframe
+BBD_s1_s3_s5_gsea_res_BP_df <- as.data.frame(BBD_s1_s3_s5_gsea_BP_readable)
+write_csv(BBD_s1_s3_s5_gsea_res_BP_df, "data/GSEA_InferCNV_Subclusters/BBD_s1_s3_s5_gsea_res_BP.csv")
+```
+
+## Visualization (BP)
+
+```{r}
+# Load results 
+BBD_s1_s3_s5_gsea_res_BP <- readRDS("data/GSEA_InferCNV_Subclusters/BBD_s1_s3_s5_gsea_res_BP.rds")
+BBD_s1_s3_s5_gsea_res_BP_df <- na.omit(read.csv("data/GSEA_InferCNV_Subclusters/BBD_s1_s3_s5_gsea_res_BP.csv"))
+```
+
+```{r}
+# Significant # of pathways 
+nrow(BBD_s1_s3_s5_gsea_res_BP_df |> filter(p.adjust < 0.05)) # 320
+```
+
+```{r}
+# Generate barplot
+# Select the top 10 upregulated pathways according to NES 
+BBD_s1_s3_s5_top10_up_BP <- BBD_s1_s3_s5_gsea_res_BP_df |>
+  filter(p.adjust < 0.05) |>
+  arrange(desc(NES)) |>
+  filter(NES > 0) |>
+  slice_head(n = 10)
+
+# Select the top 10 downregulated pathways according to NES 
+BBD_s1_s3_s5_top10_down_BP <- BBD_s1_s3_s5_gsea_res_BP_df |>
+  filter(p.adjust < 0.05) |>
+  arrange(NES) |>
+  filter(NES < 0) |>
+  slice_head(n = 10)
+
+# Combine dfs 
+BBD_s1_s3_s5_top10_updown_BP <- bind_rows(BBD_s1_s3_s5_top10_up_BP, BBD_s1_s3_s5_top10_down_BP)
+
+BBD_s1_s3_s5_barplot_BP <- BBD_s1_s3_s5_top10_updown_BP |>
+  ggplot(aes(x = NES, y = reorder(Description, NES), fill = p.adjust)) + 
+  geom_col() + 
+  scale_fill_gradient(low = "red", high = "blue") +
+  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Top-Ranked GO:BP Terms by NES\nin BBD_s3_s5 Over BBD_s1") +
+  theme_bw() 
+  
+ggsave("BBD_s1_s3_s5_barplot_BP.png", BBD_s1_s3_s5_barplot_BP, path = "plots/GSEA_InferCNV_Subclusters",
+       width = 9, height = 6, dpi = 300)
+```
+
+```{r}
+# Cnetplot
+BBD_s1_s3_s5_cnetplot_BP <- enrichplot::cnetplot(
+  BBD_s1_s3_s5_gsea_res_BP,
+  categorySizeBy = ~NES, # or "pvalue", "p.adjust"
+  showCategory = 5
+  ) 
+
+ggsave("BBD_s1_s3_s5_cnetplot_BP.png", BBD_s1_s3_s5_cnetplot_BP, path = "plots/GSEA_InferCNV_Subclusters",
+       width = 12, height = 8, dpi = 300)
+```
+
+```{r}
+# Dotplot
+BBD_s1_s3_s5_dotplot_BP <- dotplot(BBD_s1_s3_s5_gsea_res_BP, showCategory = 15) +
+  ggtitle("Top-Ranked GO:BP Terms from GSEA\nin BBD_s3_s5 Over BBD_s1") +
+  theme(axis.text.y = element_text(size = 9, family = "Arial"))
+
+ggsave("BBD_s1_s3_s5_dotplot_BP.png", BBD_s1_s3_s5_dotplot_BP, path = "plots/GSEA_InferCNV_Subclusters",
+       width = 6, height = 7, dpi = 300)
+```
+
+## Running GSEA (Hallmark)
+
+We'll use the Hallmark gene set from Molecular Signatures Database (MSigDB) for our PEA.
+
+```{r}
+# Hallmark gene set from msigdbr_collections()
+hallmark_sets <- msigdbr(species = 'Homo sapiens', collection = 'H')
+
+# Convert to named list format required by clusterprofiler: the first column should have pathway names
+# the second column should have genes in Entrez ID format 
+hallmark_sets <- hallmark_sets |>
+  dplyr::select(gs_name, ncbi_gene)
+```
+
+```{r}
+set.seed(67)
+
+# Run GSEA
+BBD_s1_s3_s5_gsea_res_HM <- clusterProfiler::GSEA(
+  geneList = BBD_s1_s3_s5_rankings_mapped, 
+  TERM2GENE = hallmark_sets, 
+  minGSSize = 15, 
+  maxGSSize = 500, 
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  nPermSimple = 50000, # Increase this value as need
+  scoreType = "std",
+  seed = TRUE
+)
+
+# Convert Entrez IDs to gene symbols for readability
+BBD_s1_s3_s5_gsea_HM_readable <- clusterProfiler::setReadable(
+  BBD_s1_s3_s5_gsea_res_HM,
+  OrgDb = org.Hs.eg.db,
+  keyType = "ENTREZID"
+  )
+
+# Clean up pathway titles for readability 
+BBD_s1_s3_s5_gsea_HM_readable@result <- BBD_s1_s3_s5_gsea_HM_readable@result |>
+  mutate(
+    Description = Description |>
+      str_replace_all("HALLMARK_", " ") |> # Delete HALLMARK_
+      str_replace_all("_", " ") |>         # Delete underscores in pathway titles
+      str_to_title(),                      # Make pathways title case instead of caps
+      .before = 1                          # Put new Description column at front
+  )
+
+saveRDS(BBD_s1_s3_s5_gsea_HM_readable, "data/GSEA_InferCNV_Subclusters/BBD_s1_s3_s5_gsea_res_HM.rds")
+
+# Convert gseaResult object into dataframe
+BBD_s1_s3_s5_gsea_res_HM_df <- as.data.frame(BBD_s1_s3_s5_gsea_HM_readable)
+write_csv(BBD_s1_s3_s5_gsea_res_HM_df, "data/GSEA_InferCNV_Subclusters/BBD_s1_s3_s5_gsea_res_HM.csv")
+```
+
+## Visualization (HM) 
+
+```{r}
+# Load results 
+BBD_s1_s3_s5_gsea_res_HM <- readRDS("data/GSEA_InferCNV_Subclusters/BBD_s1_s3_s5_gsea_res_HM.rds")
+BBD_s1_s3_s5_gsea_res_HM_df <- read.csv("data/GSEA_InferCNV_Subclusters/BBD_s1_s3_s5_gsea_res_HM.csv")
+```
+
+```{r}
+# Significant # of pathways 
+nrow(BBD_s1_s3_s5_gsea_res_HM_df |> filter(p.adjust < 0.1)) #21
+```
+
+```{r}
+# Generate barplot
+BBD_s1_s3_s5_barplot_HM <- BBD_s1_s3_s5_gsea_res_HM_df |>
+  filter(p.adjust < 0.1) |>
+  arrange(desc(NES)) |>
+  ggplot(aes(x = NES, y = reorder(Description, NES), fill = p.adjust)) + 
+  geom_col() + 
+  scale_fill_gradient(low = "red", high = "blue") +
+  labs(x = "Normalized Enrichment Score (NES)", y = "Pathway", title = "Hallmark Pathways Enriched\nin BBD_s3_s5 Over BBD_s1") +
+  theme_bw() 
+  
+ggsave("BBD_s1_s3_s5_barplot_HM.png", BBD_s1_s3_s5_barplot_HM, path = "plots/GSEA_InferCNV_Subclusters",
+       width = 9, height = 6, dpi = 300)
+```
+
+```{r}
+# Cnetplot
+BBD_s1_s3_s5_cnetplot_HM <- enrichplot::cnetplot(
+  BBD_s1_s3_s5_gsea_res_HM,
+  categorySizeBy = ~NES, # or "pvalue", "p.adjust"
+  showCategory = 5
+  ) 
+
+ggsave("BBD_s1_s3_s5_cnetplot_HM.png", BBD_s1_s3_s5_cnetplot_HM, path = "plots/GSEA_InferCNV_Subclusters",
+       width = 12, height = 8, dpi = 300)
+```
+
+```{r}
+# Dotplot
+BBD_s1_s3_s5_dotplot_HM <- dotplot(BBD_s1_s3_s5_gsea_res_HM, showCategory = 10) +
+  ggtitle("Top 10 Hallmark Pathways from GSEA\nin BBD_s3_s5 Over BBD_s1") +
+  theme(axis.text.y = element_text(size = 9, family = "Arial"))
+
+ggsave("BBD_s1_s3_s5_dotplot_HM.png", BBD_s1_s3_s5_dotplot_HM, path = "plots/GSEA_InferCNV_Subclusters",
+       width = 6, height = 7, dpi = 300)
+```

@@ -1,0 +1,71 @@
+---
+title: "08_Add_InferCNV_Metadata"
+format: gfm
+---
+
+# 08_Add_InferCNV_Metadata
+
+The goal of this script is simply to create a new metadata in the ComBat-Seq-corrected BCRF_Ep Seurat object for inferCNV subclusters. Adding this metadata column will be helpful for downstream analyses like analyzing CIBERSORTx statistics, DESeq2, GSEA, etc. 
+
+```{r}
+# Import data
+BCRF_Ep <- readRDS("data/raw_data/RE-DONE BCRF v1_Ep_combatseq.rds")
+
+# Create new metadata column of "NA" values to fill in
+BCRF_Ep$inferCNV_subcluster <- NA 
+
+# Import subcluster sample ID text files into named list 
+subclusters_list <- list(
+  "ADH_s1" = readLines("data/inferCNV_subcluster_sample_IDs/ADH_s1.txt"),
+  "BBD_s1" = readLines("data/inferCNV_subcluster_sample_IDs/BBD_s1.txt"),
+  "BBD_s2" = readLines("data/inferCNV_subcluster_sample_IDs/BBD_s2.txt"),
+  "BBD_s3" = readLines("data/inferCNV_subcluster_sample_IDs/BBD_s3.txt"),
+  "BBD_s4" = readLines("data/inferCNV_subcluster_sample_IDs/BBD_s4.txt"),
+  "BBD_s5" = readLines("data/inferCNV_subcluster_sample_IDs/BBD_s5.txt"),
+  "BBD_s6" = readLines("data/inferCNV_subcluster_sample_IDs/BBD_s6.txt"),
+  "DCIS_s1" = readLines("data/inferCNV_subcluster_sample_IDs/DCIS_s1.txt"),
+  "DCIS_s2" = readLines("data/inferCNV_subcluster_sample_IDs/DCIS_s2.txt"),
+  "IN" = readLines("data/inferCNV_subcluster_sample_IDs/IN.txt"),
+  "Invasive_s1" = readLines("data/inferCNV_subcluster_sample_IDs/Invasive_s1.txt"),
+  "Invasive_s2" = readLines("data/inferCNV_subcluster_sample_IDs/Invasive_s2.txt"),
+  "Invasive_s3" = readLines("data/inferCNV_subcluster_sample_IDs/Invasive_s3.txt"),
+  "Invasive_s4" = readLines("data/inferCNV_subcluster_sample_IDs/Invasive_s4.txt"),
+  "NL_s1" = readLines("data/inferCNV_subcluster_sample_IDs/NL_s1.txt"),
+  "NL_s2" = readLines("data/inferCNV_subcluster_sample_IDs/NL_s2.txt"),
+  "NL_s3" = readLines("data/inferCNV_subcluster_sample_IDs/NL_s3.txt"),
+  "NL_s4" = readLines("data/inferCNV_subcluster_sample_IDs/NL_s4.txt")
+)
+
+# Clean: Remove quotes and trailing spaces from sample IDs in text files 
+subclusters_list <- lapply(subclusters_list, function(x) {
+  trimws(gsub('"', '', x), which = "right")
+})
+
+# Loop through and assign the metadata
+for (subcluster_ID in names(subclusters_list)) {
+  sample_IDs <- subclusters_list[[subcluster_ID]]
+  
+  # Only assign to samples that actually exist in your Seurat object
+  valid_sample_IDs <- intersect(sample_IDs, colnames(BCRF_Ep))
+  
+  BCRF_Ep@meta.data[valid_sample_IDs, "inferCNV_subcluster"] <- subcluster_ID
+}
+
+# Check that sum of BBD samples in subcluster_IDs aligns w/ sum of dxs in original Seurat object 
+table(BCRF_Ep$inferCNV_subcluster)
+table(BCRF_Ep$dxs)
+
+saveRDS(BCRF_Ep, "data/raw_data/BCRF_Ep_combatseq_w_InferCNV.rds")
+```
+
+There is one invasive sample lost in there somewhere, but since it's the only one, we can manually identify it.
+
+```{r}
+library(dplyr)
+meta <- BCRF_Ep@meta.data
+
+BCRF_Ep@meta.data %>%
+  filter(is.na(inferCNV_subcluster)) %>%
+  count(sample_id)
+```
+

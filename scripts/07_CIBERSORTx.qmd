@@ -27,8 +27,8 @@ print(getOption("future.globals.maxSize"))
 options(Seurat.object.assay.version = "v5")
 
 # Load in Seurat objects to create mixture data
-BCRF_Ep <- readRDS("data/RE-DONE integrate BCRF v1_Ep 1.rds")
-BCRF_Str <- readRDS("data/RE-DONE integrated BCRF v1_Str 3.rds")
+BCRF_Ep <- readRDS("data/raw_data/RE-DONE integrate BCRF v1_Ep 1.rds")
+BCRF_Str <- readRDS("data/raw_data/RE-DONE integrated BCRF v1_Str 3.rds")
 ```
 
 ## (Bassez) Construct raw reference matrix 
@@ -549,7 +549,7 @@ ggsave("plots/CIBERSORTx/Ep_Kumar/Ep_Kumar_ADH_IN_DCIS_Inv.png", Ep_Kumar_ADH_IN
        width = 12, height = 6, dpi = 300)
 ```
 
-### Str
+### Str (Bassez)
 
 ```{r}
 # Load CIBERSORTx output (downloaded from the website)
@@ -642,4 +642,120 @@ Str_Bassez_ADH_IN_DCIS_Inv <- Str_Bassez_fractions_long |>
 print(Str_Bassez_ADH_IN_DCIS_Inv)
 ggsave("plots/CIBERSORTx/Str_Bassez/Str_Bassez_ADH_IN_DCIS_Inv.png", Str_Bassez_ADH_IN_DCIS_Inv, 
        width = 7, height = 5, dpi = 300)
+```
+
+### Str (Kumar)
+
+```{r}
+# Load CIBERSORTx output (downloaded from the website)
+Str_Kumar_results <- read.table(
+  "data/CIBERSORTx/CIBERSORTx_Str_Kumar_results.txt",
+  header    = TRUE,
+  sep       = "\t",
+  row.names = 1,
+  check.names = FALSE
+)
+
+# Keep only the cell fraction columns (remove p-value, correlation, RMSE)
+Str_Kumar_fraction_cols <- setdiff(
+  colnames(Str_Kumar_results),
+  c("P-value", "Correlation", "RMSE")
+)
+Str_Kumar_fractions <- Str_Kumar_results[, Str_Kumar_fraction_cols]
+
+# Add condition metadata
+Str_Kumar_fractions$sample <- rownames(Str_Kumar_fractions)
+Str_Kumar_fractions$dxs <- BCRF_Str@meta.data[rownames(Str_Kumar_fractions), "dxs"]
+
+# Reshape for plotting
+Str_Kumar_fractions_long <- Str_Kumar_fractions |>
+  tidyr::pivot_longer(
+    cols      = all_of(Str_Kumar_fraction_cols),
+    names_to  = "cell_type",
+    values_to = "proportion"
+  )
+
+# Build color palette with 39 distinct colors for Kumar cell types
+my_colors <-as.vector(colorRampPalette(glasbey())(39))
+
+# Stacked bar chart of cell type proportions per sample
+# All dxs 
+Str_Kumar_all_dxs_glasbey_colors <- Str_Kumar_fractions_long |>
+  filter(dxs %in% c("NL", "BBD", "BBD_RS", "ADH", "IN", "DCIS", "Invasive")) |>
+  mutate(dxs = factor(
+    dxs,levels = c("NL", "BBD", "BBD_RS", "ADH", "IN", "DCIS", "Invasive"))
+    ) |>
+  ggplot(aes(x = sample, y = proportion, fill = cell_type)) +
+  geom_col() +
+  labs(
+    x     = "Sample",
+    y     = "Estimated proportion",
+    title = "Cell type composition of stromal samples (CIBERSORTx)"
+  ) +
+  scale_fill_manual(values = my_colors) + 
+  theme_classic(base_size = 10) +
+  theme(axis.text.x = element_blank()) +
+  facet_grid(.~ dxs, scales = "free_x", space = "free_x")
+
+print(Str_Kumar_all_dxs_glasbey_colors)
+ggsave("plots/CIBERSORTx/Str_Kumar/Str_Kumar_all_dxs_glasbey_colors.png", Str_Kumar_all_dxs_glasbey_colors, 
+       width = 12 , height = 6, dpi = 300)
+
+Str_Kumar_all_dxs <- Str_Kumar_fractions_long |>
+  filter(dxs %in% c("NL", "BBD", "BBD_RS", "ADH", "IN", "DCIS", "Invasive")) |>
+  mutate(dxs = factor(
+    dxs,levels = c("NL", "BBD", "BBD_RS", "ADH", "IN", "DCIS", "Invasive"))
+    ) |>
+  ggplot(aes(x = sample, y = proportion, fill = cell_type)) +
+  geom_col() +
+  labs(
+    x     = "Sample",
+    y     = "Estimated proportion",
+    title = "Cell type composition of stromal samples (CIBERSORTx)"
+  ) +
+  theme_classic(base_size = 10) +
+  theme(axis.text.x = element_blank()) +
+  facet_grid(.~ dxs, scales = "free_x", space = "free_x")
+
+print(Str_Kumar_all_dxs)
+ggsave("plots/CIBERSORTx/Str_Kumar/Str_Kumar_all_dxs.png", Str_Kumar_all_dxs, 
+       width = 12 , height = 6, dpi = 300)
+
+# NL, BBD, BBD_RS dxs 
+Str_Kumar_NL_BBD_BBDRS <- Str_Kumar_fractions_long |>
+  filter(dxs %in% c("NL", "BBD", "BBD_RS")) |>
+  mutate(dxs = factor(dxs, levels = c("NL", "BBD", "BBD_RS"))) |>
+  ggplot(aes(x = sample, y = proportion, fill = cell_type)) + 
+    geom_col() +
+    labs(
+      x     = "Sample",
+      y     = "Estimated proportion",
+      title = "Cell type composition of stromal samples (CIBERSORTx)"
+    ) + 
+    theme_classic() + 
+    theme(axis.text.x = element_blank()) +
+    facet_grid(.~ dxs, scales = "free_x", space = "free_x")
+  
+print(Str_Kumar_NL_BBD_BBDRS)
+ggsave("plots/CIBERSORTx/Str_Kumar/Str_Kumar_NL_BBD_BBDRS.png", Str_Kumar_NL_BBD_BBDRS, 
+       width = 12, height = 6, dpi = 300)
+
+# ADH, IN, DCIS, Invasive dxs
+Str_Kumar_ADH_IN_DCIS_Inv <- Str_Kumar_fractions_long |>
+  filter(dxs %in% c("ADH", "IN", "DCIS", "Invasive")) |>
+  mutate(dxs = factor(dxs, levels = c("ADH", "IN", "DCIS", "Invasive"))) |>
+  ggplot(aes(x = sample, y = proportion, fill = cell_type)) + 
+    geom_col() +
+    labs(
+      x     = "Sample",
+      y     = "Estimated proportion",
+      title = "Cell type composition of stromal samples (CIBERSORTx)"
+    ) + 
+    theme_classic() + 
+    theme(axis.text.x = element_blank()) +
+    facet_grid(.~ dxs, scales = "free_x", space = "free_x")
+  
+print(Str_Kumar_ADH_IN_DCIS_Inv)
+ggsave("plots/CIBERSORTx/Str_Kumar/Str_Kumar_ADH_IN_DCIS_Inv.png", Str_Kumar_ADH_IN_DCIS_Inv, 
+       width = 12, height = 6, dpi = 300)
 ```

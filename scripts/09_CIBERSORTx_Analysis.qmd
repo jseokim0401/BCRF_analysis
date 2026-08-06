@@ -7,6 +7,8 @@ format: gfm
 
 The goal of this script will be to conduct statistical tests on CIBERSORTx results to compare whether each cell type's fraction differs across diagnostic groups, focusing on differences between "NL", "BBD", and "DCIS" epithelial samples.
 
+The first comparison will be between BBD_s1 (normal-like) v. BBD_s2 (high CNVs) from subclusters defined by inferCNV. 
+
 The general workflow will be to perform omnibus testing with Kruskal-Wallis screen -\> FDR -\> pairwise Wilcoxon -\> FDR.
 
 # Set-up
@@ -26,12 +28,24 @@ print(getOption("future.globals.maxSize"))
 options(Seurat.object.assay.version = "v5")
 ```
 
-# Read in CIBERSORTx results and metadata
+# Read in metadata & CIBERSORTx results
 
 ```{r}
+# Load-in metadata
+BCRF_Ep <- readRDS("data/raw_data/BCRF_Ep_combatseq_w_InferCNV.rds")
+
+# Define outliers 
+outliers <- c("BCRF4_10_15659_755_EN_Ep", "BCRF4_10_15837_771_EN_1_Ep")
+
+# Filter relevant metadata 
+meta <- BCRF_Ep@meta.data |>
+  rownames_to_column("sample_id") |>
+  filter(inferCNV_subcluster %in% c("BBD_s1", "BBD_s2")) |>
+  filter(!sample_id %in% outliers)
+
 # Load-in raw CIBERSORTx results table
 ciber_raw <- read.delim(
-  "data/CIBERSORTx/CIBERSORTx_Ep_Bassez_results.txt", 
+  "data/CIBERSORTx/CIBERSORTx_Ep_Kumar_results.txt", 
   sep = "\t",
   header = TRUE,
   check.names = FALSE          # keep cell type names exactly as CIBERSORTx wrote them
@@ -45,35 +59,11 @@ cols_to_drop <- c("P-value", "Correlation", "RMSE")
 cell_type_cols <- setdiff(colnames(ciber_raw), c("Mixture", cols_to_drop))
 ```
 
-```{r}
-# Build metadata from samples in inferCNV-defined dxs subclusters 
-NL_samples   <- c("sample1", "sample2", "sample3")    
-BBD_samples  <- c("sample4", "sample5")               
-DCIS_samples <- c("sample6", "sample7", "sample8")   
-
-# Build lookup table: one row per sample, with its diagnosis group label.
-meta <- rbind(
-  data.frame(sample_id = NL_samples,   dxs = "NL"),
-  data.frame(sample_id = BBD_samples,  dxs = "BBD"),
-  data.frame(sample_id = DCIS_samples, dxs = "DCIS")
-)
-
-# Sanity check: make sure no sample ID appears in more than one group list
-# (would indicate a copy-paste error from your mentor's list or your own transcription).
-dup_check <- meta %>% count(sample_id) %>% filter(n > 1)
-if (nrow(dup_check) > 0) {
-  warning(paste(
-    "These sample IDs appear in more than one group list:",
-    paste(dup_check$sample_id, collapse = ", ")
-  ))
-}
-```
-
 # Reshape to long format and attach group labels
 
 ```{r}
 df_long <- ciber_raw |>
-  select(Mixture, all_of(cell_type_cols)) |>      # keep sample ID + fraction columns only
+  select(Mixture, all_of(cell_type_cols)) |>       # keep sample ID + fraction columns only
   pivot_longer(
     cols = all_of(cell_type_cols),                 # columns to stack into long format
     names_to = "cell_type",                        # new column holding cell type names
@@ -81,20 +71,14 @@ df_long <- ciber_raw |>
   ) |>
   left_join(meta, by = c("Mixture" = "sample_id")) # attach diagnosis_group per sample
 
-# Sanity check: make sure every sample matched to a diagnosis group.
-# If this prints any rows, those samples had no metadata match --
-# likely a sample ID mismatch (e.g., hyphens vs dots from make.names()).
-missing_group <- df_long %>% filter(is.na(dxs))
-if (nrow(missing_group) > 0) {
-  warning(paste(
-    "Some samples have no matching diagnosis_group -- check sample ID formatting.",
-    "Affected samples:", paste(unique(missing_group$Mixture), collapse = ", ")
-  ))
-}
+# How many total samples are in df_long vs how many actually matched?
+n_distinct(df_long$Mixture)                     # total unique samples in CIBERSORTx output: 552
+n_distinct(df_long$Mixture[!is.na(df_long$inferCNV_subcluster)])  # how many matched to BBD_s1/s2: 58
+nrow(meta)  # 58 = 58 
 
-# Make dxs a factor with an explicit level order for plot facet labeling and how pairwise comparisons are labeled
+# Make inferCNV_subcluster a factor with an explicit level order for plot facet labeling and how pairwise comparisons are labeled
 df_long <- df_long %>%
-  mutate(dxs = factor(dxs, levels = c("NL", "BBD", "DCIS")))
+  mutate(inferCNV_subcluster = factor(inferCNV_subcluster, levels = c("BBD_s1", "BBD_s2")))
 
 ```
 
