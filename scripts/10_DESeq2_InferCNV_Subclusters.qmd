@@ -1,0 +1,436 @@
+---
+title: "09_DESeq2_InferCNV_Subclusters"
+format: gfm
+---
+
+# 09_DESeq2_InferCNV_Subclusters
+
+The goal of this script will be to run DESeq2 for several comparisons in the BCRF dataset subclusters defined by inferCNV including:
+
+- BBD_s1: normal-like v. BBD_s2: high-CNVs (1 and 16)
+  - outliers BCRF_4-10_15659 and 1583 removed from BBD_s2 
+  - To analyze CNV differences 
+- BBD_s1: normal-like v. BBD_s3 & BBD_s5: low-CNVs, more normal-like  
+  - outliers BCRF4_10_14894 and 15687 removed from BBD_s3
+  - To analyze general disease progression from normal-like to more disease-state BBD 
+
+## Set-up to run DESeq2
+
+```{r}
+# Load libraries
+library(Seurat)
+library(DESeq2)
+library(BiocParallel)
+register(SnowParam(7))
+library(tidyverse)
+library(EnhancedVolcano)
+
+options(Seurat.object.assay.version = "v5")
+```
+
+```{r}
+# Import data
+BCRF_Ep <- readRDS("data/raw_data/BCRF_Ep_combatseq_w_InferCNV.rds")
+```
+
+## BBD_s1 v. BBD_s2
+
+```{r}
+# Remove outliers 
+outliers <- c("BCRF4_10_15659_755_EN_Ep", "BCRF4_10_15837_771_EN_1_Ep")
+
+# Subset BCRF data to BBD_s1 and BBD_s2 inferCNV subclusters, removing outliers
+keep <- BCRF_Ep@meta.data$inferCNV_subcluster %in% c("BBD_s1", "BBD_s2") &
+        !(colnames(BCRF_Ep) %in% outliers)
+
+BBD_s1_s2_sub_BCRF <- subset(BCRF_Ep, cells = colnames(BCRF_Ep)[keep])
+
+# Get counts data 
+BBD_s1_s2_counts <- GetAssayData(BBD_s1_s2_sub_BCRF, assay = "RNA", layer = "counts")
+
+# Build colData from meta.data
+BBD_s1_s2_coldata <- data.frame(
+  patient = factor(BBD_s1_s2_sub_BCRF@meta.data$patient), 
+  inferCNV_subcluster = factor(BBD_s1_s2_sub_BCRF@meta.data$inferCNV_subcluster, levels = c("BBD_s1", "BBD_s2")),
+  row.names = colnames(BBD_s1_s2_counts)
+)
+```
+
+```{r}
+# Create DESeqDataSet from subset counts and group information 
+BBD_s1_s2_dds <- DESeqDataSetFromMatrix(
+  countData = BBD_s1_s2_counts,
+  colData = BBD_s1_s2_coldata, 
+  design = ~ patient + inferCNV_subcluster 
+)
+```
+
+### Filtering decisions
+
+```{r}
+library(tidyverse)
+library(patchwork)
+
+# Before filtering
+counts_long <- as.data.frame(as.matrix(BBD_s1_s2_counts)) %>%
+  rownames_to_column("gene") %>%
+  pivot_longer(
+    cols = -gene,
+    names_to = "sample",
+    values_to = "raw_count"
+  ) %>%
+  mutate(
+    group = BBD_s1_s2_coldata$inferCNV_subcluster[match(sample, rownames(BBD_s1_s2_coldata))]
+  )
+
+# Stats per group
+group_stats <- counts_long %>%
+  group_by(group) %>%
+  summarise(
+    n_genes = length(unique(gene)),
+    pct_zeros = round(100 * mean(raw_count == 0), 0)
+  )
+group_stats
+
+before_filter_plot <- ggplot(counts_long, aes(x = raw_count, fill = group)) +
+  geom_histogram(binwidth = 1, position = "identity", alpha = 0.6) +
+  coord_cartesian(xlim = c(0, 100)) +
+  labs(
+    title = "Distribution of Raw Counts Before Filtering",
+    x = "Raw Count", y = "Frequency", fill = "Subcluster",
+    subtitle = paste0(format(n_genes, big.mark = ","), " genes\n", pct_zeros, "% zeros")
+  ) +
+  theme_minimal()
+```
+
+```{r}
+# Filter genes: keep genes with ≥10 counts in at least 8 samples (smallest group size)
+smallest_group_size <- min(table(BBD_s1_s2_coldata$inferCNV_subcluster))  # = 8
+
+keep_genes <- rowSums(counts(BBD_s1_s2_dds) >= 10) >= smallest_group_size
+BBD_s1_s2_dds <- BBD_s1_s2_dds[keep_genes, ]
+
+# Confirm how many genes survived
+nrow(BBD_s1_s2_dds) # 14448
+```
+
+```{r}
+# After filtering plot
+filtered_counts_long <- as.data.frame(as.matrix(counts(BBD_s1_s2_dds))) %>% # Get post-filter counts
+  rownames_to_column("gene") %>% 
+  pivot_longer(
+    cols = -gene,
+    names_to = "sample",
+    values_to = "raw_count"
+  ) %>%
+  mutate(
+    group = BBD_s1_s2_coldata$inferCNV_subcluster[match(sample, rownames(BBD_s1_s2_coldata))]
+  )
+
+# Stats per group
+group_stats_filtered <- filtered_counts_long %>%
+  group_by(group) %>%
+  summarise(
+    n_genes_filtered = length(unique(gene)),
+    pct_zeros_filtered = round(100 * mean(raw_count == 0), 0)
+  )
+group_stats_filtered
+
+after_filter_plot <- ggplot(filtered_counts_long, aes(x = raw_count, fill = group)) +
+  geom_histogram(binwidth = 1, position = "identity", alpha = 0.6) +
+  coord_cartesian(xlim = c(0, 100)) +
+  labs(
+    title = "Distribution of Raw Counts After Filtering",
+    x = "Raw Count", y = "Frequency", fill = "Subcluster",
+    subtitle = paste0(format(n_genes_filtered, big.mark = ","), " genes\n", pct_zeros_filtered, "% zeros")
+  ) +
+  theme_minimal()
+
+ggsave("plots/DESeq2_InferCNV_Subclusters/BBD_s1_s2_filtering.png", before_filter_plot + after_filter_plot, width = 12, height = 6, dpi = 300)
+saveRDS(BBD_s1_s2_dds, "data/DESeq2_InferCNV_Subclusters/BBD_s1_s2_dds_torun.rds")
+```
+
+We want to validate whether filtering out so many genes causes the inferCNV subclusters to lose their identities i.e. will the data still cluster into two distinct groups of BBD_s1 and BBD_s2?  
+
+```{r}
+# Get the filtered gene list from your DESeq2 dds object
+filtered_genes <- rownames(BBD_s1_s2_dds)  # genes that passed your filter
+length(filtered_genes)
+
+# Subset the Seurat object to only those genes (keeping all cells/samples)
+BBD_s1_s2_sub_BCRF_filtered <- subset(
+  BBD_s1_s2_sub_BCRF,
+  features = filtered_genes
+)
+
+# Standard pipeline, restricted to the filtered gene set as the feature space
+BBD_s1_s2_sub_BCRF_filtered <- NormalizeData(BBD_s1_s2_sub_BCRF_filtered)
+BBD_s1_s2_sub_BCRF_filtered <- ScaleData(BBD_s1_s2_sub_BCRF_filtered, features = filtered_genes)
+BBD_s1_s2_sub_BCRF_filtered <- RunPCA(
+  BBD_s1_s2_sub_BCRF_filtered, 
+  features = filtered_genes,
+  npcs = min(30, ncol(BBD_s1_s2_sub_BCRF_filtered) - 1)  # cap PCs at n_samples - 1 since you only have 58 samples
+)
+BBD_s1_s2_sub_BCRF_filtered <- RunUMAP(BBD_s1_s2_sub_BCRF_filtered, dims = 1:min(20, ncol(BBD_s1_s2_sub_BCRF_filtered) - 1))
+
+# Plot colored by inferCNV subcluster
+BBD_s1_s2_filtered_umap <- DimPlot(
+  BBD_s1_s2_sub_BCRF_filtered, 
+  group.by = "inferCNV_subcluster", 
+  pt.size = 2
+) + 
+  labs(title = "BBD_s1 vs BBD_s2 (Filtered Genes Only)")
+
+ggsave("plots/DESeq2_InferCNV_Subclusters/BBD_s1_s2_filtered_umap.png", BBD_s1_s2_filtered_umap, width = 6, height = 5, dpi = 300)
+```
+
+### Run DESeq
+
+```{r}
+BBD_s1_s2_dds <- readRDS("data/DESeq2_InferCNV_Subclusters/BBD_s1_s2_dds_torun.rds")
+
+# Run DEseq
+BBD_s1_s2_dds <- DESeq(BBD_s1_s2_dds, parallel = TRUE)
+
+# Check summary
+summary(BBD_s1_s2_dds_res)
+
+# Check plot dispersion estimates
+png("plots/DESeq2_InferCNV_Subclusters/BBD_s1_s2_dispersion_plot.png", width = 600, height = 500)
+plotDispEsts(BBD_s1_s2_dds)
+dev.off()
+```
+
+```{r}
+# Save DESeq results 
+BBD_s1_s2_dds_res <- results(BBD_s1_s2_dds, contrast = c("inferCNV_subcluster", "BBD_s2", "BBD_s1"))
+saveRDS(BBD_s1_s2_dds_res, "data/DESeq2_InferCNV_Subclusters/BBD_s1_s2_res.rds")
+
+# Convert results to dataframe
+BBD_s1_s2_dds_res_df <- BBD_s1_s2_dds_res |>
+  as.data.frame() |>
+  rownames_to_column(var = "Gene") # Make column for gene ids 
+
+# Save results 
+write.csv(BBD_s1_s2_dds_res_df, "data/DESeq2_InferCNV_Subclusters/BBD_s1_s2_res.csv")
+```
+
+### Volcano plot 
+
+```{r}
+# Load in results data 
+BBD_s1_s2_res <- read.csv("data/DESeq2_InferCNV_Subclusters/BBD_s1_s2_res.csv")
+```
+
+```{r}
+# Generate volcano plot 
+keyGenes <- c("ESR1", "ERBB2", "MYC", "TP53", "PIK3CA", "CCND1")
+
+# Any expression may be dissection artifacts? 
+
+BBD_s1_s2_VP <- EnhancedVolcano(BBD_s1_s2_res,
+  x = "log2FoldChange",                 
+  y = "padj",                
+  lab = BBD_s1_s2_res$Gene, 
+  pCutoff = 1e-05, 
+  FCcutoff = 1,
+  title = "Genes differentially expressed in BBD_s2 relative to BBD_s1",
+  selectLab = keyGenes,         # Label only key genes
+  labSize = 3.0, 
+  labCol = "black",
+  labFace = "bold",
+  boxedLabels = TRUE,           # boxes make labels stand out from the cloud
+  drawConnectors = TRUE,        # connector lines from point to label
+  widthConnectors = 0.5,
+  colConnectors = 'black',
+  arrowheads = FALSE 
+) +
+  # change the overall theme
+  theme_classic() +
+  # move the legend to the bottom
+  theme(legend.position = "bottom")
+
+# Save plots as .png
+ggsave("BBD_s1_s2_VP.png", BBD_s1_s2_VP, path = "plots/DESeq2_InferCNV_Subclusters",
+       width = 7, height = 7, dpi = 300)
+```
+
+## BBD_s1 v. BBD_s3&5
+
+```{r}
+# Remove outliers 
+outliers <- c("BCRF4_10_14894_674_BBD_Ep_S31_R1_001", "BCRF4_10_15687_757_UDH_Ep")
+
+# Subset BCRF data to BBD_s1 and BBD_s2 inferCNV subclusters, removing outliers
+keep <- BCRF_Ep@meta.data$inferCNV_subcluster %in% c("BBD_s1", "BBD_s3", "BBD_s5") &
+        !(colnames(BCRF_Ep) %in% outliers)
+
+BBD_s1_s3_s5_sub_BCRF <- subset(BCRF_Ep, cells = colnames(BCRF_Ep)[keep])
+
+# Get counts data 
+BBD_s1_s3_s5_counts <- GetAssayData(BBD_s1_s3_s5_sub_BCRF, assay = "RNA", layer = "counts")
+
+# Build colData from meta.data, collapsing BBD_s3 & s5 into one group 
+BBD_s1_s3_s5_coldata <- data.frame(
+  patient = factor(BBD_s1_s3_s5_sub_BCRF@meta.data$patient),
+  inferCNV_subcluster = factor(
+    ifelse(BBD_s1_s3_s5_sub_BCRF@meta.data$inferCNV_subcluster %in% c("BBD_s3", "BBD_s5"),
+           "BBD_s3_s5",
+           as.character(BBD_s1_s3_s5_sub_BCRF@meta.data$inferCNV_subcluster)),
+    levels = c("BBD_s1", "BBD_s3_s5")
+  ),
+  row.names = colnames(BBD_s1_s3_s5_sub_BCRF)
+)
+```
+
+```{r}
+# Create DESeqDataSet from subset counts and group information 
+BBD_s1_s3_s5_dds <- DESeqDataSetFromMatrix(
+  countData = BBD_s1_s3_s5_counts,
+  colData = BBD_s1_s3_s5_coldata, 
+  design = ~ patient + inferCNV_subcluster 
+)
+```
+
+### Filtering decisions
+
+```{r}
+library(tidyverse)
+library(patchwork)
+
+# Before filtering
+counts_long <- as.data.frame(as.matrix(BBD_s1_s3_s5_counts)) %>%
+  rownames_to_column("gene") %>%
+  pivot_longer(
+    cols = -gene,
+    names_to = "sample",
+    values_to = "raw_count"
+  ) %>%
+  mutate(
+    group = BBD_s1_s3_s5_coldata$inferCNV_subcluster[match(sample, rownames(BBD_s1_s3_s5_coldata))]
+  )
+
+# Stats per group
+group_stats <- counts_long %>%
+  group_by(group) %>%
+  summarise(
+    n_genes = length(unique(gene)),
+    pct_zeros = round(100 * mean(raw_count == 0), 0)
+  )
+group_stats
+
+before_filter_plot <- ggplot(counts_long, aes(x = raw_count, fill = group)) +
+  geom_histogram(binwidth = 1, position = "identity", alpha = 0.6) +
+  coord_cartesian(xlim = c(0, 100)) +
+  labs(
+    title = "Distribution of Raw Counts Before Filtering",
+    x = "Raw Count", y = "Frequency", fill = "Subcluster",
+    subtitle = paste0(format(group_stats$n_genes, big.mark = ","), " genes\n", group_stats$pct_zeros, "% zeros")
+  ) +
+  theme_minimal()
+```
+
+```{r}
+# Filter genes: keep genes with ≥10 counts
+keep_genes <- rowSums(counts(BBD_s1_s3_s5_dds)) >= 10
+BBD_s1_s3_s5_dds <- BBD_s1_s3_s5_dds[keep_genes, ]
+
+# Confirm how many genes survived
+nrow(BBD_s1_s3_s5_dds) # 34138
+```
+
+```{r}
+# After filtering plot
+filtered_counts_long <- as.data.frame(as.matrix(counts(BBD_s1_s3_s5_dds))) %>% # Get post-filter counts
+  rownames_to_column("gene") %>% 
+  pivot_longer(
+    cols = -gene,
+    names_to = "sample",
+    values_to = "raw_count"
+  ) %>%
+  mutate(
+    group = BBD_s1_s3_s5_coldata$inferCNV_subcluster[match(sample, rownames(BBD_s1_s3_s5_coldata))]
+  )
+
+# Stats per group
+group_stats_filtered <- filtered_counts_long %>%
+  group_by(group) %>%
+  summarise(
+    n_genes_filtered = length(unique(gene)),
+    pct_zeros_filtered = round(100 * mean(raw_count == 0), 0)
+  )
+group_stats_filtered
+
+after_filter_plot <- ggplot(filtered_counts_long, aes(x = raw_count, fill = group)) +
+  geom_histogram(binwidth = 1, position = "identity", alpha = 0.6) +
+  coord_cartesian(xlim = c(0, 100)) +
+  labs(
+    title = "Distribution of Raw Counts After Filtering",
+    x = "Raw Count", y = "Frequency", fill = "Subcluster",
+    subtitle = paste0(format(group_stats_filtered$n_genes_filtered, big.mark = ","), " genes\n", group_stats_filtered$pct_zeros_filtered, "% zeros")
+  ) +
+  theme_minimal()
+
+ggsave("plots/DESeq2_InferCNV_Subclusters/BBD_s1_s3_s5_filtering.png", before_filter_plot + after_filter_plot, width = 12, height = 6, dpi = 300)
+saveRDS(BBD_s1_s3_s5_dds, "data/DESeq2_InferCNV_Subclusters/BBD_s1_s3_s5_dds_torun.rds")
+```
+
+We want to validate whether filtering out so many genes causes the inferCNV subclusters to lose their identities i.e. will the data still cluster into distinct groups of BBD_s1, BBD_s3, and BBD_s5?  
+
+```{r}
+# Get the filtered gene list from your DESeq2 dds object
+filtered_genes <- rownames(BBD_s1_s3_s5_dds)  # genes that passed your filter
+length(filtered_genes)
+
+# Subset the Seurat object to only those genes (keeping all cells/samples)
+BBD_s1_s3_s5_sub_BCRF_filtered <- subset(
+  BBD_s1_s3_s5_sub_BCRF,
+  features = filtered_genes
+)
+
+# Standard pipeline, restricted to the filtered gene set as the feature space
+BBD_s1_s3_s5_sub_BCRF_filtered <- NormalizeData(BBD_s1_s3_s5_sub_BCRF_filtered)
+BBD_s1_s3_s5_sub_BCRF_filtered <- ScaleData(BBD_s1_s3_s5_sub_BCRF_filtered, features = filtered_genes)
+BBD_s1_s3_s5_sub_BCRF_filtered <- RunPCA(
+  BBD_s1_s3_s5_sub_BCRF_filtered, 
+  features = filtered_genes,
+  npcs = min(30, ncol(BBD_s1_s3_s5_sub_BCRF_filtered) - 1)
+)
+BBD_s1_s3_s5_sub_BCRF_filtered <- RunUMAP(BBD_s1_s3_s5_sub_BCRF_filtered, dims = 1:min(20, ncol(BBD_s1_s3_s5_sub_BCRF_filtered) - 1))
+
+# Plot colored by inferCNV subcluster
+BBD_s1_s3_s5_filtered_umap <- DimPlot(
+  BBD_s1_s3_s5_sub_BCRF_filtered, 
+  group.by = "inferCNV_subcluster", 
+  pt.size = 2
+) + 
+  labs(title = "BBD_s1 vs BBD_s3&5 (Filtered Genes Only)")
+
+ggsave("plots/DESeq2_InferCNV_Subclusters/BBD_s1_s3_s5_filtered_umap.png", BBD_s1_s3_s5_filtered_umap, width = 6, height = 5, dpi = 300)
+```
+
+The UMAP of the filtered genes distorts the distinct clustering of s1 from s3&s5, so DESeq will be run without any filtering. 
+
+### Run DESeq
+
+```{r}
+BBD_s1_s3_s5_dds <- readRDS("data/DESeq2_InferCNV_Subclusters/BBD_s1_s3_s5_dds_torun.rds")
+
+# Run DEseq
+BBD_s1_s3_s5_dds <- DESeq(BBD_s1_s3_s5_dds, parallel = TRUE)
+
+# Save DESeq results 
+BBD_s1_s3_s5_dds_res <- results(BBD_s1_s3_s5_dds, contrast = c("inferCNV_subcluster", "BBD_s3_s5", "BBD_s1"))
+saveRDS(BBD_s1_s3_s5_dds_res, "data/DESeq2_InferCNV_Subclusters/BBD_s1_s3_s5_res.rds")
+
+# Convert results to dataframe
+BBD_s1_s3_s5_dds_res_df <- BBD_s1_s3_s5_dds_res |>
+  as.data.frame() |>
+  rownames_to_column(var = "Gene") # Make column for gene ids 
+
+# Save results 
+write.csv(BBD_s1_s3_s5_dds_res_df, "data/DESeq2_InferCNV_Subclusters/BBD_s1_s3_s5_res.csv")
+
+# Check summary
+summary(BBD_s1_s3_s5_dds_res)
+```
